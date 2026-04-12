@@ -36,6 +36,19 @@ class TestCreateAgent:
         assert result["container_id"] == "ctr-123"
         mock_docker.containers.run.assert_called_once()
 
+    def test_create_agent_unknown_role_raises(self, fake_supabase, mock_docker):
+        from app.services.orchestrator import Orchestrator
+        from app.services.template_loader import UnknownRoleError
+
+        agents_table = fake_supabase.get_table("agents")
+
+        orch = Orchestrator()
+        with pytest.raises(UnknownRoleError):
+            orch.create_agent("user-001", "nonexistent-role")
+
+        mock_docker.containers.run.assert_not_called()
+        agents_table.mock.insert.assert_not_called()
+
     def test_create_agent_docker_error(self, fake_supabase, mock_docker):
         from app.services.orchestrator import Orchestrator
 

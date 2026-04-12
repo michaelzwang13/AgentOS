@@ -3,6 +3,7 @@ import secrets
 from docker.errors import NotFound, APIError
 from app.config import get_settings
 from app.models.agent import AgentModel
+from app.services.template_loader import load_template
 
 
 class Orchestrator:
@@ -20,6 +21,7 @@ class Orchestrator:
             )
 
     def create_agent(self, user_id: str, role: str, config: dict | None = None) -> dict:
+        load_template(role)  # raises UnknownRoleError if the template is missing
         agent = AgentModel.create(user_id, role, config)
         agent_token = f"at_{secrets.token_urlsafe(32)}"
         gateway_token = secrets.token_urlsafe(32)

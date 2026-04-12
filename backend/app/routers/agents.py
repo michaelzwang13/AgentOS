@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.auth import get_current_user
 from app.schemas.agent import AgentCreate, AgentResponse, AgentStatusResponse
 from app.services.orchestrator import Orchestrator
+from app.services.template_loader import UnknownRoleError
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
@@ -18,6 +19,8 @@ def hire_agent(
 ):
     try:
         return orch.create_agent(user["id"], payload.role, payload.config)
+    except UnknownRoleError as e:
+        raise HTTPException(400, str(e))
     except RuntimeError as e:
         raise HTTPException(500, str(e))
 
