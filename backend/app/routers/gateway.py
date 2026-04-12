@@ -28,6 +28,23 @@ class DiscordRequest(BaseModel):
     content: str
 
 
+class GitHubPRReviewRequest(BaseModel):
+    owner: str
+    repo: str
+    pull_number: int
+    body: str
+    event: str = "COMMENT"  # COMMENT | APPROVE | REQUEST_CHANGES
+
+
+class GitHubPRCommentRequest(BaseModel):
+    owner: str
+    repo: str
+    pull_number: int
+    body: str
+    path: str
+    line: int
+
+
 # ── Write endpoints ────────────────────────────────────────────────────────────
 
 @router.post("/email/send")
@@ -51,6 +68,58 @@ async def send_slack_message(
     try:
         return await GatewayService.send_slack_message(
             user["id"], payload.channel, payload.text
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+# ── GitHub endpoints ───────────────────────────────────────────────────────────
+
+@router.get("/github/pulls/{owner}/{repo}")
+async def list_pull_requests(
+    owner: str, repo: str, state: str = "open",
+    user: dict = Depends(get_current_user),
+):
+    try:
+        return await GatewayService.list_pull_requests(user["id"], owner, repo, state)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@router.get("/github/pulls/{owner}/{repo}/{pull_number}")
+async def get_pull_request(
+    owner: str, repo: str, pull_number: int,
+    user: dict = Depends(get_current_user),
+):
+    try:
+        return await GatewayService.get_pull_request(user["id"], owner, repo, pull_number)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@router.post("/github/review")
+async def create_pr_review(
+    payload: GitHubPRReviewRequest,
+    user: dict = Depends(get_current_user),
+):
+    try:
+        return await GatewayService.create_pr_review(
+            user["id"], payload.owner, payload.repo,
+            payload.pull_number, payload.body, payload.event,
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@router.post("/github/review/comment")
+async def create_pr_review_comment(
+    payload: GitHubPRCommentRequest,
+    user: dict = Depends(get_current_user),
+):
+    try:
+        return await GatewayService.create_pr_review_comment(
+            user["id"], payload.owner, payload.repo,
+            payload.pull_number, payload.body, payload.path, payload.line,
         )
     except ValueError as e:
         raise HTTPException(400, str(e))

@@ -93,6 +93,15 @@ Use it to send emails, Slack messages, or Discord messages on behalf of your use
 Always include your agent token in requests: Bearer ${AGENT_TOKEN:-none}
 AGENTSEOF
 
+# ── Copy skills into OpenClaw workspace ────────────────────────────────────
+
+SKILLS_DIR="$WORKSPACE/skills"
+mkdir -p "$SKILLS_DIR"
+if [ -d /agent/skills ]; then
+    cp -r /agent/skills/* "$SKILLS_DIR/" 2>/dev/null || true
+    echo "[entrypoint] Skills installed: $(ls "$SKILLS_DIR" | tr '\n' ', ')"
+fi
+
 # ── Start services ─────────────────────────────────────────────────────────
 
 echo "[entrypoint] OpenClaw config written to $OPENCLAW_HOME"

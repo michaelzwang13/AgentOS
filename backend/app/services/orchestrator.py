@@ -21,7 +21,7 @@ class Orchestrator:
                 self._settings.docker_network, driver="bridge"
             )
 
-    def create_agent(self, user_id: str, role: str, config: dict | None = None) -> dict:
+    def create_agent(self, user_id: str, role: str, config: dict | None = None, user_api_key: str = "") -> dict:
         load_template(role)  # raises UnknownRoleError if the template is missing
         agent = AgentModel.create(user_id, role, config)
         agent_token = f"at_{secrets.token_urlsafe(32)}"
@@ -35,6 +35,7 @@ class Orchestrator:
                 environment={
                     "PLATFORM_GATEWAY_URL": self._settings.platform_gateway_url,
                     "AGENT_TOKEN": agent_token,
+                    "USER_API_KEY": user_api_key,
                     "AGENT_ID": agent["id"],
                     "AGENT_ROLE": role,
                     "AGENT_CONFIG_JSON": json.dumps(config or {}),

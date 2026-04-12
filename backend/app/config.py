@@ -26,7 +26,12 @@ class Settings(BaseSettings):
     google_client_id: str = ""
     google_client_secret: str = ""
 
+    # OAuth — GitHub
+    github_client_id: str = ""
+    github_client_secret: str = ""
+
     # Platform
+    base_url: str = ""
     platform_host: str = "0.0.0.0"
     platform_port: int = 8000
     platform_gateway_url: str = "http://host.docker.internal:8000/gateway"

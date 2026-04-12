@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from app.auth import get_current_user
 from app.schemas.agent import AgentCreate, AgentResponse, AgentStatusResponse
 from app.services.orchestrator import Orchestrator
@@ -15,10 +15,11 @@ def _get_orchestrator() -> Orchestrator:
 def hire_agent(
     payload: AgentCreate,
     user: dict = Depends(get_current_user),
+    x_api_key: str = Header(...),
     orch: Orchestrator = Depends(_get_orchestrator),
 ):
     try:
-        return orch.create_agent(user["id"], payload.role, payload.config)
+        return orch.create_agent(user["id"], payload.role, payload.config, user_api_key=x_api_key)
     except UnknownRoleError as e:
         raise HTTPException(400, str(e))
     except RuntimeError as e:
