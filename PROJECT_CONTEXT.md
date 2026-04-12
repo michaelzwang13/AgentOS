@@ -1,5 +1,7 @@
 # Fiverr for OpenClaw — AI Employee Platform
 
+> **Hackathon scope.** This document is the full brainstorming context, much of which describes the post-hackathon product. For the hackathon demo we ship a single path: landing → talent directory → employee profile → hire flow wired to the backend. Two starter employees (Code Review Engineer, Customer Support). Real OAuth for GitHub only. No billing. See `ROADMAP.md` for the hackathon callout and `CLAUDE.md` for decisions.
+
 ## One-liner
 A managed platform that packages OpenClaw instances as specialized, containerized AI employees that companies hire in two clicks — no code, no setup, no self-hosting.
 
@@ -70,14 +72,23 @@ Key components:
 - Own role policy (what actions are allowed)
 - Own communication style and context
 
-## MVP Employees (10)
-Criteria: visible impact within 24 hours, text-in/text-out, replaces $500-2k/month freelancer work.
+## Hackathon Starter Employees (2)
 
-1. **Code Review Engineer** — reviews every PR automatically
+The hackathon demo ships exactly two employees — one engineering, one non-engineering — to prove the hiring metaphor end-to-end without drowning in role authoring.
+
+1. **Code Review Engineer** — engineering side. "I will review every PR within 10 minutes of it opening." GitHub OAuth (real). Sample output: inline review comments on a real PR.
+2. **Customer Support** — non-engineering side. "I will triage every incoming support message and draft a reply." Slack + Gmail (simulated OAuth for the hackathon). Sample output: categorized ticket + draft response.
+
+Both roles need YAML templates in `backend/agent-config/templates/` before the hire flow can actually create agents. Only `secretary.yaml` exists today.
+
+## Post-Hackathon Employee Candidate Pool (10)
+Preserved from the pre-hackathon brainstorm. Optimized for visible impact within 24 hours, text-in/text-out, replacing $500-2k/month freelancer work. The hackathon's two starter employees are drawn/adapted from this list.
+
+1. **Code Review Engineer** — reviews every PR automatically *(hackathon starter)*
 2. **Standup Reporter** — posts daily summary of what changed across repos/channels
 3. **Issue Triage Engineer** — labels, prioritizes, routes incoming issues
 4. **CRM Cleanup Manager** — deduplicates, fills missing fields, flags dead leads
-5. **Support Ticket Router** — reads incoming tickets, categorizes, routes to right person
+5. **Support Ticket Router** — reads incoming tickets, categorizes, routes to right person *(basis for hackathon Customer Support)*
 6. **Changelog Writer** — turns merged PRs into customer-facing release notes
 7. **Meeting Notes Summarizer** — joins calls or reads transcripts, posts structured summaries
 8. **Expense Categorizer** — reads receipts/invoices, categorizes, flags policy violations
