@@ -94,8 +94,8 @@ if [ ! -d ".venv" ]; then
     log "Created Python virtual environment"
 fi
 source .venv/bin/activate
-pip install fastapi uvicorn httpx pydantic-settings cryptography supabase anthropic docker pyyaml -q 2>/dev/null || \
-    pip install fastapi uvicorn httpx pydantic-settings cryptography supabase anthropic docker pyyaml
+pip install fastapi uvicorn httpx "pydantic[email]" pydantic-settings cryptography supabase anthropic docker pyyaml email-validator -q 2>/dev/null || \
+    pip install fastapi uvicorn httpx "pydantic[email]" pydantic-settings cryptography supabase anthropic docker pyyaml email-validator
 log "Backend dependencies installed"
 
 BACKEND_PORT="${BACKEND_PORT:-8000}"
