@@ -1,17 +1,20 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { DockNav } from '@/components/ui/dock-nav'
+import { useRoles } from '@/lib/useRoles'
 
 /* ═══════════════════════════════════════════
    PAGE 1 — MISSION CONTROL (Minimal)
    ═══════════════════════════════════════════ */
 
-const employees = [
-  { id: 'EMP-001', name: 'Code Review Engineer', status: 'active', tasks: 847 },
-  { id: 'EMP-002', name: 'Customer Support', status: 'active', tasks: 1263 },
-  { id: 'EMP-003', name: 'Data Analyst', status: 'idle', tasks: 156 },
-  { id: 'EMP-004', name: 'Security Auditor', status: 'active', tasks: 392 },
-]
+type EmpStatus = 'active' | 'idle'
+
+const empDecoration: Record<string, { empId: string; tasks: number; status: EmpStatus }> = {
+  'code-review-engineer': { empId: 'EMP-001', tasks: 847, status: 'active' },
+  'customer-support':     { empId: 'EMP-002', tasks: 1263, status: 'active' },
+  'secretary':            { empId: 'EMP-003', tasks: 156, status: 'idle' },
+}
+const defaultDeco = { empId: 'EMP-???', tasks: 0, status: 'idle' as EmpStatus }
 
 const recentActivity = [
   { time: '14:33', msg: 'Reviewed PR #1204 on acme/core' },
@@ -22,6 +25,7 @@ const recentActivity = [
 
 export default function Page1() {
   const [clock, setClock] = useState('')
+  const { roles, error, loading } = useRoles()
 
   useEffect(() => {
     const tick = () => setClock(new Date().toLocaleTimeString('en-US', { hour12: false }))
@@ -29,6 +33,13 @@ export default function Page1() {
     const iv = setInterval(tick, 1000)
     return () => clearInterval(iv)
   }, [])
+
+  const decorated = (roles ?? []).map(r => ({
+    role: r,
+    deco: empDecoration[r.id] ?? defaultDeco,
+  }))
+  const activeCount = decorated.filter(d => d.deco.status === 'active').length
+  const totalTasks = decorated.reduce((sum, d) => sum + d.deco.tasks, 0)
 
   return (
     <div className="dot-grid" style={{ minHeight: '100vh', background: 'var(--black)' }}>
@@ -72,8 +83,8 @@ export default function Page1() {
           }}
         >
           {[
-            { label: 'Active', value: '3', unit: '/ 4' },
-            { label: 'Tasks Done', value: '2,658', unit: '' },
+            { label: 'Active', value: String(activeCount), unit: `/ ${decorated.length || 0}` },
+            { label: 'Tasks Done', value: totalTasks.toLocaleString(), unit: '' },
             { label: 'Uptime', value: '99.97', unit: '%' },
           ].map(m => (
             <div key={m.label} style={{
@@ -109,27 +120,49 @@ export default function Page1() {
               EMPLOYEE ROSTER
             </span>
           </div>
-          {employees.map((emp, i) => (
-            <div key={emp.id} style={{
+
+          {loading && [0, 1, 2].map(i => (
+            <div key={`sk-${i}`} style={{
+              padding: '16px 24px',
+              borderBottom: i < 2 ? '1px solid var(--border-default)' : 'none',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 14,
+            }}>
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--border-default)' }} />
+              <div style={{ height: 14, width: 180, background: 'var(--border-default)', borderRadius: 3, opacity: 0.4 }} />
+            </div>
+          ))}
+
+          {error && (
+            <div style={{ padding: '16px 24px' }}>
+              <span className="font-system" style={{ fontSize: 12, color: 'var(--status-error)' }}>
+                {error}
+              </span>
+            </div>
+          )}
+
+          {!loading && !error && decorated.map(({ role, deco }, i) => (
+            <div key={role.id} style={{
               padding: '16px 24px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              borderBottom: i < employees.length - 1 ? '1px solid var(--border-default)' : 'none',
+              borderBottom: i < decorated.length - 1 ? '1px solid var(--border-default)' : 'none',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                 <div style={{
                   width: 8, height: 8, borderRadius: '50%',
-                  background: emp.status === 'active' ? 'var(--accent)' : 'var(--status-idle)',
-                  ...(emp.status === 'active' ? { animation: 'pulse-status 1.5s ease-in-out infinite' } : {}),
+                  background: deco.status === 'active' ? 'var(--accent)' : 'var(--status-idle)',
+                  ...(deco.status === 'active' ? { animation: 'pulse-status 1.5s ease-in-out infinite' } : {}),
                 }} />
                 <div>
-                  <div className="font-narrative" style={{ fontSize: 14, color: 'var(--text-primary)' }}>{emp.name}</div>
-                  <div className="font-system" style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{emp.id}</div>
+                  <div className="font-narrative" style={{ fontSize: 14, color: 'var(--text-primary)' }}>{role.display_name}</div>
+                  <div className="font-system" style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{deco.empId}</div>
                 </div>
               </div>
               <span className="font-system" style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                {emp.tasks} tasks
+                {deco.tasks} tasks
               </span>
             </div>
           ))}

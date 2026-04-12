@@ -1,21 +1,29 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { DockNav } from '@/components/ui/dock-nav'
+import { useRoles } from '@/lib/useRoles'
 
 /* ═══════════════════════════════════════════
    PAGE 2 — DEPARTURE BOARD (Minimal)
    ═══════════════════════════════════════════ */
 
-const rows = [
-  { id: 'OC-101', name: 'Code Review Engineer', destination: 'GitHub', status: 'DEPLOYED', statusColor: 'var(--accent)', time: '14:00' },
-  { id: 'OC-102', name: 'Customer Support', destination: 'Slack + Gmail', status: 'DEPLOYED', statusColor: 'var(--accent)', time: '14:15' },
-  { id: 'OC-103', name: 'Data Analyst', destination: 'Warehouse', status: 'BOARDING', statusColor: '#00DD77', time: '14:30' },
-  { id: 'OC-104', name: 'Security Auditor', destination: 'CVE Database', status: 'ON TIME', statusColor: 'var(--text-secondary)', time: '15:00' },
-  { id: 'OC-105', name: 'Technical Writer', destination: 'Confluence', status: 'DELAYED', statusColor: 'var(--status-error)', time: '15:15' },
-]
+interface FlightDeco {
+  flight: string
+  destination: string
+  status: string
+  statusColor: string
+  time: string
+}
+
+const flightDecoration: Record<string, FlightDeco> = {
+  'code-review-engineer': { flight: 'OC-101', destination: 'GitHub',           status: 'DEPLOYED', statusColor: 'var(--accent)', time: '14:00' },
+  'customer-support':     { flight: 'OC-102', destination: 'Slack + Gmail',    status: 'DEPLOYED', statusColor: 'var(--accent)', time: '14:15' },
+  'secretary':            { flight: 'OC-103', destination: 'Gmail + Calendar', status: 'BOARDING', statusColor: '#00DD77',       time: '14:30' },
+}
 
 export default function Page2() {
   const [clock, setClock] = useState('')
+  const { roles, error, loading } = useRoles()
 
   useEffect(() => {
     const tick = () => setClock(new Date().toLocaleTimeString('en-US', { hour12: false }))
@@ -23,6 +31,19 @@ export default function Page2() {
     const iv = setInterval(tick, 1000)
     return () => clearInterval(iv)
   }, [])
+
+  const rows = (roles ?? []).map((r, i) => {
+    const deco = flightDecoration[r.id]
+    return {
+      id: r.id,
+      flight: deco?.flight ?? `OC-${String(200 + i).padStart(3, '0')}`,
+      name: r.display_name,
+      destination: deco?.destination ?? (r.required_tools.join(' + ') || '—'),
+      status: deco?.status ?? 'ON TIME',
+      statusColor: deco?.statusColor ?? 'var(--text-secondary)',
+      time: deco?.time ?? '15:00',
+    }
+  })
 
   return (
     <div className="dot-grid" style={{ minHeight: '100vh', background: 'var(--black)' }}>
@@ -81,8 +102,32 @@ export default function Page2() {
             ))}
           </div>
 
+          {/* Loading skeletons */}
+          {loading && [0, 1, 2].map(i => (
+            <div key={`sk-${i}`} style={{
+              display: 'grid',
+              gridTemplateColumns: '72px 1fr 1fr 100px',
+              padding: '18px 24px',
+              alignItems: 'center',
+              borderBottom: i < 2 ? '1px solid var(--border-default)' : 'none',
+            }}>
+              <div style={{ height: 12, width: 50, background: 'var(--border-default)', borderRadius: 3, opacity: 0.4 }} />
+              <div style={{ height: 12, width: 140, background: 'var(--border-default)', borderRadius: 3, opacity: 0.4 }} />
+              <div style={{ height: 12, width: 100, background: 'var(--border-default)', borderRadius: 3, opacity: 0.4 }} />
+              <div style={{ height: 12, width: 60, background: 'var(--border-default)', borderRadius: 3, opacity: 0.4 }} />
+            </div>
+          ))}
+
+          {error && (
+            <div style={{ padding: '18px 24px' }}>
+              <span className="font-system" style={{ fontSize: 12, color: 'var(--status-error)' }}>
+                {error}
+              </span>
+            </div>
+          )}
+
           {/* Rows */}
-          {rows.map((row, i) => (
+          {!loading && !error && rows.map((row, i) => (
             <motion.div
               key={row.id}
               initial={{ opacity: 0, x: -12 }}
@@ -96,7 +141,7 @@ export default function Page2() {
                 borderBottom: i < rows.length - 1 ? '1px solid var(--border-default)' : 'none',
               }}
             >
-              <span className="font-display" style={{ fontSize: 13, color: 'var(--accent)' }}>{row.id}</span>
+              <span className="font-display" style={{ fontSize: 13, color: 'var(--accent)' }}>{row.flight}</span>
               <div>
                 <div className="font-display" style={{ fontSize: 13, color: 'var(--text-primary)', letterSpacing: '0.03em' }}>{row.name}</div>
                 <div className="font-system" style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{row.time}</div>
