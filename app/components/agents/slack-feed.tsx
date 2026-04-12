@@ -118,7 +118,7 @@ export function SlackFeed({ onConnectionChange }: SlackFeedProps) {
               variant="outline"
               size="sm"
               className="text-xs h-6"
-              onClick={() => (window.location.href = "/api/auth/slack")}
+              onClick={() => (window.location.href = `/api/auth/slack?next=${encodeURIComponent(window.location.pathname + window.location.search)}`)}
             >
               Connect Slack
             </Button>

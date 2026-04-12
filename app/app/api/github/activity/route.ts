@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { readBearer } from "@/lib/oauth-next";
 
 interface GithubNotification {
   id: string;
@@ -59,7 +60,7 @@ function reasonLabel(reason: string): string {
 }
 
 export async function GET(req: NextRequest) {
-  const token = req.cookies.get("github_token")?.value;
+  const token = readBearer(req, req.cookies.get("github_token")?.value);
 
   if (!token) {
     return NextResponse.json({ connected: false, items: [] });

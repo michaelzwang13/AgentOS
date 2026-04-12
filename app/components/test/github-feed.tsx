@@ -105,7 +105,7 @@ export function GithubFeed({ onContextChange }: GithubFeedProps) {
           </Button>
         ) : (
           <Button variant="outline" size="sm" className="text-xs h-6"
-            onClick={() => (window.location.href = "/api/auth/github")}>
+            onClick={() => (window.location.href = `/api/auth/github?next=${encodeURIComponent(window.location.pathname + window.location.search)}`)}>
             Connect GitHub
           </Button>
         )}

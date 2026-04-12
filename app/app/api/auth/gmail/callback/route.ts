@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isCrossOrigin, resolveNext, withQuery, withQueryAndHash } from "@/lib/oauth-next";
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
 const CLIENT_ID = process.env.GOOGLE_CLIENT_ID!;
@@ -8,9 +9,12 @@ const REDIRECT_URI = `${BASE_URL}/api/auth/gmail/callback`;
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get("code");
   const error = req.nextUrl.searchParams.get("error");
+  const nextUrl = resolveNext(req.nextUrl.searchParams.get("state"));
 
   if (error || !code) {
-    return NextResponse.redirect(`${BASE_URL}/agents?gmail_error=${error || "missing_code"}`);
+    return NextResponse.redirect(
+      withQuery(nextUrl, { gmail_error: error || "missing_code" }, BASE_URL)
+    );
   }
 
   const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
@@ -28,10 +32,25 @@ export async function GET(req: NextRequest) {
   const data = await tokenRes.json();
 
   if (data.error || !data.access_token) {
-    return NextResponse.redirect(`${BASE_URL}/agents?gmail_error=${data.error || "token_failed"}`);
+    return NextResponse.redirect(
+      withQuery(nextUrl, { gmail_error: data.error || "token_failed" }, BASE_URL)
+    );
   }
 
-  const response = NextResponse.redirect(`${BASE_URL}/agents?gmail_connected=true`);
+  // Cross-origin: ship tokens via URL fragment so the design-ui can stash them in
+  // localStorage. Fragments aren't sent to servers or recorded in Referer.
+  if (isCrossOrigin(nextUrl, BASE_URL)) {
+    const hash: Record<string, string> = { gmail_access: data.access_token };
+    if (data.refresh_token) hash.gmail_refresh = data.refresh_token;
+    return NextResponse.redirect(
+      withQueryAndHash(nextUrl, { gmail_connected: "true" }, hash, BASE_URL)
+    );
+  }
+
+  // Same-origin: keep the existing httpOnly cookie flow.
+  const response = NextResponse.redirect(
+    withQuery(nextUrl, { gmail_connected: "true" }, BASE_URL)
+  );
   response.cookies.set("gmail_token", data.access_token, {
     httpOnly: true,
     secure: true,
@@ -39,7 +58,6 @@ export async function GET(req: NextRequest) {
     maxAge: data.expires_in || 3600,
     path: "/",
   });
-  // Store refresh token separately (long-lived)
   if (data.refresh_token) {
     response.cookies.set("gmail_refresh_token", data.refresh_token, {
       httpOnly: true,

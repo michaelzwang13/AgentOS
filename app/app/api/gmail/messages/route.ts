@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { readBearer } from "@/lib/oauth-next";
 
 interface GmailMessage {
   id: string;
@@ -54,8 +55,13 @@ async function refreshAccessToken(refreshToken: string): Promise<string | null> 
 }
 
 export async function GET(req: NextRequest) {
-  let token = req.cookies.get("gmail_token")?.value;
-  const refreshToken = req.cookies.get("gmail_refresh_token")?.value;
+  let token = readBearer(req, req.cookies.get("gmail_token")?.value);
+  // Gmail needs a refresh token for long-lived sessions. Accept it from either a
+  // cookie or a custom header that the design-ui can set from localStorage.
+  const refreshToken =
+    req.headers.get("x-gmail-refresh-token") ||
+    req.cookies.get("gmail_refresh_token")?.value ||
+    undefined;
 
   if (!token && !refreshToken) {
     return NextResponse.json({ connected: false, emails: [] });

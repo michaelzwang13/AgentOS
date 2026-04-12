@@ -94,7 +94,7 @@ export function GmailFeed({ onContextChange }: GmailFeedProps) {
           </Button>
         ) : (
           <Button variant="outline" size="sm" className="text-xs h-6"
-            onClick={() => (window.location.href = "/api/auth/gmail")}>
+            onClick={() => (window.location.href = `/api/auth/gmail?next=${encodeURIComponent(window.location.pathname + window.location.search)}`)}>
             Connect Gmail
           </Button>
         )}

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isCrossOrigin, resolveNext, withQuery, withQueryAndHash } from "@/lib/oauth-next";
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
 const CLIENT_ID = process.env.GITHUB_CLIENT_ID!;
@@ -7,10 +8,11 @@ const CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET!;
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get("code");
   const error = req.nextUrl.searchParams.get("error");
+  const nextUrl = resolveNext(req.nextUrl.searchParams.get("state"));
 
   if (error || !code) {
     return NextResponse.redirect(
-      `${BASE_URL}/agents?github_error=${error || "missing_code"}`
+      withQuery(nextUrl, { github_error: error || "missing_code" }, BASE_URL)
     );
   }
 
@@ -32,16 +34,30 @@ export async function GET(req: NextRequest) {
 
   if (data.error || !data.access_token) {
     return NextResponse.redirect(
-      `${BASE_URL}/agents?github_error=${data.error || "token_failed"}`
+      withQuery(nextUrl, { github_error: data.error || "token_failed" }, BASE_URL)
     );
   }
 
-  const response = NextResponse.redirect(`${BASE_URL}/agents?github_connected=true`);
+  // Cross-origin: ship token via URL fragment for the design-ui.
+  if (isCrossOrigin(nextUrl, BASE_URL)) {
+    return NextResponse.redirect(
+      withQueryAndHash(
+        nextUrl,
+        { github_connected: "true" },
+        { github_access: data.access_token },
+        BASE_URL
+      )
+    );
+  }
+
+  const response = NextResponse.redirect(
+    withQuery(nextUrl, { github_connected: "true" }, BASE_URL)
+  );
   response.cookies.set("github_token", data.access_token, {
     httpOnly: true,
     secure: true,
     sameSite: "none",
-    maxAge: 60 * 60 * 24 * 30, // GitHub tokens don't expire unless revoked
+    maxAge: 60 * 60 * 24 * 30,
     path: "/",
   });
   return response;

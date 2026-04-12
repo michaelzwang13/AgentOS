@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSlackMessages, disconnectSlack } from "@/lib/backend-client";
+import { readBearer } from "@/lib/oauth-next";
 
 export async function GET(req: NextRequest) {
+  // If the caller supplied a bearer token (design-ui from the cross-origin flow),
+  // use it directly and skip the backend path — the backend wouldn't know this user.
+  const bearer = readBearer(req, undefined);
+  if (bearer) {
+    return fetchSlackDirect(bearer);
+  }
+
   // Try backend first
   try {
     const backendRes = await getSlackMessages();

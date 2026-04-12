@@ -95,7 +95,7 @@ export default function AgentsPage() {
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   const connected = tab === "slack" ? slackConn : tab === "gmail" ? gmailConn : githubConn;
-  const connectHref = { slack: "/api/auth/slack", gmail: "/api/auth/gmail", github: "/api/auth/github" }[tab];
+  const connectHref = `/api/auth/${tab}?next=${encodeURIComponent("/agents")}`;
   const feedData = tab === "slack" ? slackData : tab === "gmail" ? gmailData : githubData;
   const unread = (items: typeof feedData) => items.filter(i => "read" in i ? !i.read : (i as GithubItem).unread).length;
 
