@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 BACKEND="$ROOT/backend"
-FRONTEND="$ROOT/app"
+FRONTEND="$ROOT/design-ui"
 
 # Colors
 RED='\033[0;31m'
@@ -20,7 +20,6 @@ info() { echo -e "${CYAN}[→]${NC} $1"; }
 cleanup() {
     echo ""
     warn "Shutting down..."
-    # Kill background processes
     [ -n "${BACKEND_PID:-}" ] && kill "$BACKEND_PID" 2>/dev/null && log "Backend stopped"
     [ -n "${FRONTEND_PID:-}" ] && kill "$FRONTEND_PID" 2>/dev/null && log "Frontend stopped"
     exit 0
@@ -88,25 +87,14 @@ fi
 
 # ─── Backend: install deps + start ──────────────────────────────────
 
-info "Setting up backend venv..."
-cd "$BACKEND"
-VENV="$BACKEND/.venv"
-if [ ! -d "$VENV" ]; then
-    $PYTHON -m venv "$VENV"
-    log "Created venv at backend/.venv"
-else
-    log "Using existing venv at backend/.venv"
-fi
-VENV_PY="$VENV/bin/python"
-
 info "Installing backend dependencies..."
-"$VENV_PY" -m pip install --upgrade pip -q
-"$VENV_PY" -m pip install -e ".[dev]" -q 2>/dev/null || "$VENV_PY" -m pip install -e . -q
+cd "$BACKEND"
+$PYTHON -m pip install fastapi uvicorn httpx pydantic-settings cryptography supabase anthropic docker pyyaml -q 2>/dev/null
 log "Backend dependencies installed"
 
 BACKEND_PORT="${BACKEND_PORT:-8000}"
 info "Starting backend on http://localhost:$BACKEND_PORT ..."
-"$VENV_PY" -m uvicorn app.main:app --host 0.0.0.0 --port "$BACKEND_PORT" --reload &
+$PYTHON -m uvicorn app.main:app --host 0.0.0.0 --port "$BACKEND_PORT" --reload &
 BACKEND_PID=$!
 
 # Wait for backend to be ready
@@ -126,25 +114,32 @@ done
 
 info "Installing frontend dependencies..."
 cd "$FRONTEND"
-if [ -f "package-lock.json" ]; then
-    npm ci --silent 2>/dev/null || npm install --silent
-else
-    npm install --silent
-fi
-log "Frontend dependencies installed"
+if command -v bun &>/dev/null; then
+    bun install --silent 2>/dev/null || bun install
+    log "Frontend dependencies installed (bun)"
 
-info "Starting frontend on http://localhost:3000 ..."
-npm run dev &
+    info "Starting frontend on http://localhost:5173 ..."
+    bun run dev &
+elif command -v npm &>/dev/null; then
+    npm install --silent 2>/dev/null || npm install
+    log "Frontend dependencies installed (npm)"
+
+    info "Starting frontend on http://localhost:5173 ..."
+    npm run dev &
+else
+    err "Neither bun nor npm found. Install one of them."
+    exit 1
+fi
 FRONTEND_PID=$!
 
 # Wait for frontend
-for i in {1..30}; do
-    if curl -sf http://localhost:3000 >/dev/null 2>&1; then
+for i in {1..20}; do
+    if curl -sf http://localhost:5173 >/dev/null 2>&1; then
         log "Frontend is up"
         break
     fi
-    if [ "$i" -eq 30 ]; then
-        warn "Frontend still starting (may take a moment with Next.js compilation)"
+    if [ "$i" -eq 20 ]; then
+        warn "Frontend still starting..."
     fi
     sleep 1
 done
@@ -156,9 +151,13 @@ echo -e "${GREEN}═════════════════════
 echo -e "${GREEN}   Platform is running!${NC}"
 echo -e "${GREEN}═══════════════════════════════════════════════${NC}"
 echo ""
+echo -e "  Frontend:     ${CYAN}http://localhost:5173${NC}"
 echo -e "  Backend API:  ${CYAN}http://localhost:8000${NC}"
 echo -e "  API docs:     ${CYAN}http://localhost:8000/docs${NC}"
-echo -e "  Frontend:     ${CYAN}http://localhost:3000${NC}"
+echo ""
+echo -e "  1. Go to ${CYAN}http://localhost:5173/login${NC} to create an account"
+echo -e "  2. Then open ${CYAN}http://localhost:5173/agents${NC} for the Signal Feed"
+echo -e "  3. Click CONNECT on any tab to link Slack/Gmail/GitHub"
 echo ""
 echo -e "  Press ${YELLOW}Ctrl+C${NC} to stop everything"
 echo ""
