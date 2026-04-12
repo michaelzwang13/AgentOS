@@ -1,5 +1,6 @@
 """Tests for the Orchestrator service."""
 
+import json
 import pytest
 from unittest.mock import MagicMock, patch
 from docker.errors import NotFound, APIError
@@ -35,6 +36,43 @@ class TestCreateAgent:
         assert result["status"] == "running"
         assert result["container_id"] == "ctr-123"
         mock_docker.containers.run.assert_called_once()
+
+    def test_create_agent_passes_config_as_env_json(self, fake_supabase, mock_docker):
+        from app.services.orchestrator import Orchestrator
+
+        agent_data = {
+            "id": "agent-001",
+            "user_id": "user-001",
+            "role": "secretary",
+            "status": "pending",
+            "config_json": {},
+            "container_id": None,
+            "created_at": "2025-01-01T00:00:00+00:00",
+        }
+
+        agents_table = fake_supabase.get_table("agents")
+        agents_table.set_insert_result([agent_data])
+        agents_table.set_update_result(
+            [{**agent_data, "status": "running", "container_id": "ctr-123"}]
+        )
+
+        mock_container = MagicMock()
+        mock_container.id = "ctr-123"
+        mock_docker.containers.run.return_value = mock_container
+
+        config = {
+            "tier": "assistant",
+            "repos": "acme/frontend, acme/backend",
+            "cadence": "on PR open",
+            "nickname": "Reviewer #1",
+        }
+
+        orch = Orchestrator()
+        orch.create_agent("user-001", "secretary", config)
+
+        env = mock_docker.containers.run.call_args.kwargs["environment"]
+        assert "AGENT_CONFIG_JSON" in env
+        assert json.loads(env["AGENT_CONFIG_JSON"]) == config
 
     def test_create_agent_unknown_role_raises(self, fake_supabase, mock_docker):
         from app.services.orchestrator import Orchestrator

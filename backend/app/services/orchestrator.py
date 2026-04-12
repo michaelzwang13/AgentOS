@@ -1,4 +1,5 @@
 import docker
+import json
 import secrets
 from docker.errors import NotFound, APIError
 from app.config import get_settings
@@ -36,6 +37,7 @@ class Orchestrator:
                     "AGENT_TOKEN": agent_token,
                     "AGENT_ID": agent["id"],
                     "AGENT_ROLE": role,
+                    "AGENT_CONFIG_JSON": json.dumps(config or {}),
                     "USER_ID": user_id,
                     "LLM_API_KEY": self._settings.llm_api_key,
                     "MOONSHOT_API_KEY": self._settings.llm_api_key,
