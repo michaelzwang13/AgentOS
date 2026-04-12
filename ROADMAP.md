@@ -15,6 +15,8 @@ This repo is currently a hackathon project. The 14–19 week phased plan below i
 - **Real OAuth for GitHub only.** Slack and Gmail use a simulated consent screen writing a placeholder token via `POST /credentials`. One provider goes real to prove the pattern, the rest stay stubbed to keep the demo fast.
 - **Iconographic persona.** Role-only, no human names or photos.
 
+**Demo bar:** "hired and running is enough." The hackathon demo ends when a user clicks Hire, the container spins up, and the confirmation screen says the employee is live. The employee does not need to actually do real work in the demo — placeholder task execution in `agent-runtime/server.py` is fine.
+
 **Out of scope for the hackathon (ship post-hackathon):**
 - Billing, Stripe, payment gate, trial logic (Phase 6).
 - Post-hire surfaces: team page, employee workspace, work log/audit trail, performance review, offboarding UI.

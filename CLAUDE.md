@@ -14,6 +14,7 @@ AI Employee Platform — "Fiverr for OpenClaw." Managed platform that packages O
 - **Hackathon OAuth fidelity:** real OAuth for GitHub only; Slack and Gmail use a simulated consent screen that writes a placeholder token via `POST /credentials`.
 - **Hackathon billing:** out of scope. No Stripe, no payment gate, no trial logic. Phase 6 is post-hackathon work.
 - **Frontend scope:** hire flow end-to-end (landing → talent directory → employee profile → 4-step hire wizard → confirm). Post-hire surfaces (work log, team page, performance review) are post-hackathon.
+- **Hackathon demo bar:** "hired and running is enough." Demo ends at the confirmation screen; real LLM task execution is post-hackathon.
 - Target: 20-80 person teams (Series A-C)
 - Platform → agent communication via HTTP POST to container internal IPs on Docker bridge network
 - Agent runtime runs FastAPI on port 8080 inside each container
