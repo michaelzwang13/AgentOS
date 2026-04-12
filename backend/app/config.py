@@ -17,10 +17,19 @@ class Settings(BaseSettings):
     # LLM
     llm_api_key: str = ""
 
+    # OAuth — Slack
+    slack_client_id: str = ""
+    slack_client_secret: str = ""
+
+    # OAuth — Gmail / Google
+    google_client_id: str = ""
+    google_client_secret: str = ""
+
     # Platform
     platform_host: str = "0.0.0.0"
     platform_port: int = 8000
     platform_gateway_url: str = "http://host.docker.internal:8000/gateway"
+    frontend_url: str = "http://localhost:3000"
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

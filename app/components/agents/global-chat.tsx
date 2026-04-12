@@ -12,9 +12,9 @@ export function GlobalChat() {
     <div>
       <div className="flex items-center justify-between mb-3">
         <div>
-          <h2 className="text-lg font-semibold">Cross-Agent Query</h2>
+          <h2 className="text-lg font-semibold">Ask Your Team</h2>
           <p className="text-sm text-muted-foreground">
-            Ask across all your integrations at once
+            Query across all your AI employees at once
           </p>
         </div>
         <button

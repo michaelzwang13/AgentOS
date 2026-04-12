@@ -5,6 +5,7 @@ import { mockSlackMessages, SlackMessage } from "@/lib/mock-data";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 const channelColors: Record<string, string> = {
@@ -27,6 +28,9 @@ export function SlackFeed({ onConnectionChange }: SlackFeedProps) {
   const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(true);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [showTokenInput, setShowTokenInput] = useState(false);
+  const [tokenInput, setTokenInput] = useState("");
+  const [savingToken, setSavingToken] = useState(false);
 
   useEffect(() => {
     fetchMessages();
@@ -63,6 +67,25 @@ export function SlackFeed({ onConnectionChange }: SlackFeedProps) {
     setDisconnecting(false);
   }
 
+  async function handleSaveToken() {
+    if (!tokenInput.trim()) return;
+    setSavingToken(true);
+    try {
+      const res = await fetch("/api/slack/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: tokenInput.trim() }),
+      });
+      if (res.ok) {
+        setShowTokenInput(false);
+        setTokenInput("");
+        await fetchMessages();
+      }
+    } finally {
+      setSavingToken(false);
+    }
+  }
+
   return (
     <div className="flex flex-col h-full">
       <div className="px-4 py-2 border-b border-border flex items-center justify-between shrink-0">
@@ -90,16 +113,50 @@ export function SlackFeed({ onConnectionChange }: SlackFeedProps) {
             Disconnect
           </Button>
         ) : (
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-xs h-6"
-            onClick={() => (window.location.href = "/api/auth/slack")}
-          >
-            Connect Slack
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs h-6"
+              onClick={() => (window.location.href = "/api/auth/slack")}
+            >
+              Connect Slack
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs h-6 text-muted-foreground"
+              onClick={() => setShowTokenInput((v) => !v)}
+            >
+              Paste token
+            </Button>
+          </div>
         )}
       </div>
+
+      {showTokenInput && !connected && (
+        <div className="px-4 py-3 border-b border-border bg-accent/20">
+          <p className="text-xs text-muted-foreground mb-2">
+            Go to your Slack app → <strong>OAuth & Permissions → Install to Workspace</strong> → copy the <strong>User OAuth Token</strong> (xoxp-...)
+          </p>
+          <div className="flex gap-2">
+            <Input
+              value={tokenInput}
+              onChange={(e) => setTokenInput(e.target.value)}
+              placeholder="xoxp-..."
+              className="text-xs h-7 font-mono"
+            />
+            <Button
+              size="sm"
+              className="text-xs h-7 shrink-0"
+              onClick={handleSaveToken}
+              disabled={!tokenInput.trim() || savingToken}
+            >
+              {savingToken ? "Saving..." : "Save"}
+            </Button>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex-1 flex items-center justify-center">

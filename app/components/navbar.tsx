@@ -9,7 +9,7 @@ export function Navbar() {
 
   const links = [
     { href: "/", label: "Dashboard" },
-    { href: "/marketplace", label: "Marketplace" },
+    { href: "/marketplace", label: "Talent Directory" },
   ];
 
   return (
@@ -40,7 +40,7 @@ export function Navbar() {
           </div>
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-            <span className="text-xs text-muted-foreground">3 agents active</span>
+            <span className="text-xs text-muted-foreground">3 AI employees active</span>
           </div>
         </div>
       </div>

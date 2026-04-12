@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { storeCredential } from "@/lib/backend-client";
 
 const SLACK_CLIENT_ID = process.env.SLACK_CLIENT_ID!;
 const SLACK_CLIENT_SECRET = process.env.SLACK_CLIENT_SECRET!;
-const REDIRECT_URI = process.env.NEXT_PUBLIC_BASE_URL
-  ? `${process.env.NEXT_PUBLIC_BASE_URL}/api/auth/slack/callback`
-  : "http://localhost:3000/api/auth/slack/callback";
+const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+const REDIRECT_URI = `${BASE_URL}/api/auth/slack/callback`;
 
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get("code");
@@ -12,11 +12,11 @@ export async function GET(req: NextRequest) {
 
   if (error || !code) {
     return NextResponse.redirect(
-      new URL(`/agent/slack?error=${error || "missing_code"}`, req.url)
+      `${BASE_URL}/agent/slack?error=${error || "missing_code"}`
     );
   }
 
-  // Exchange code for access token
+  // Exchange code for token
   const params = new URLSearchParams({
     client_id: SLACK_CLIENT_ID,
     client_secret: SLACK_CLIENT_SECRET,
@@ -34,31 +34,40 @@ export async function GET(req: NextRequest) {
 
   if (!data.ok) {
     return NextResponse.redirect(
-      new URL(`/agent/slack?error=${data.error}`, req.url)
+      `${BASE_URL}/agent/slack?error=${data.error}`
     );
   }
 
-  // User token is nested under authed_user for user scopes
   const userToken = data.authed_user?.access_token;
-
   if (!userToken) {
     return NextResponse.redirect(
-      new URL("/agent/slack?error=no_user_token", req.url)
+      `${BASE_URL}/agent/slack?error=no_user_token`
     );
   }
 
-  // Store token in httpOnly cookie (no DB needed for now)
-  const response = NextResponse.redirect(
-    new URL("/agent/slack?connected=true", req.url)
-  );
+  const scopes = (data.authed_user?.scope || "").split(",").filter(Boolean);
 
-  response.cookies.set("slack_token", userToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 60 * 60 * 24 * 30, // 30 days
-    path: "/",
-  });
+  // Store in backend credential vault (source of truth)
+  try {
+    const backendRes = await storeCredential("slack", userToken, scopes);
+    if (!backendRes.ok) {
+      console.error("Backend credential store failed:", await backendRes.text());
+    }
+  } catch (err) {
+    console.error("Could not reach backend, falling back to cookie:", err);
+    // Fallback: store in cookie so the app still works without the backend
+    const fallback = NextResponse.redirect(
+      `${BASE_URL}/agent/slack?connected=true&mode=local`
+    );
+    fallback.cookies.set("slack_token", userToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+      maxAge: 60 * 60 * 24 * 30,
+      path: "/",
+    });
+    return fallback;
+  }
 
-  return response;
+  return NextResponse.redirect(`${BASE_URL}/agent/slack?connected=true`);
 }

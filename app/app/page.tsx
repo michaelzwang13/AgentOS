@@ -8,7 +8,7 @@ export default function DashboardPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Your active agents are monitoring and reasoning across your tools.
+          Your AI employees are monitoring and reasoning across your tools.
         </p>
       </div>
 
