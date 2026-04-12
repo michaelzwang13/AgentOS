@@ -22,6 +22,7 @@ class Orchestrator:
     def create_agent(self, user_id: str, role: str, config: dict | None = None) -> dict:
         agent = AgentModel.create(user_id, role, config)
         agent_token = f"at_{secrets.token_urlsafe(32)}"
+        gateway_token = secrets.token_urlsafe(32)
 
         try:
             container = self._client.containers.run(
@@ -35,6 +36,8 @@ class Orchestrator:
                     "AGENT_ROLE": role,
                     "USER_ID": user_id,
                     "LLM_API_KEY": self._settings.llm_api_key,
+                    "MOONSHOT_API_KEY": self._settings.llm_api_key,
+                    "OPENCLAW_GATEWAY_TOKEN": gateway_token,
                 },
                 network=self._settings.docker_network,
                 mem_limit="512m",

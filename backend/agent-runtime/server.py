@@ -1,11 +1,11 @@
 """Lightweight FastAPI server that runs inside each agent container.
 
-Receives tasks from the platform, reports status, and supports cancellation.
+Receives tasks from the platform, forwards them to the local OpenClaw
+gateway for execution, and reports results back.
 """
 
 import asyncio
 import os
-import uuid
 
 import httpx
 from fastapi import FastAPI, HTTPException
@@ -19,6 +19,10 @@ USER_ID = os.getenv("USER_ID", "")
 PLATFORM_GATEWAY_URL = os.getenv("PLATFORM_GATEWAY_URL", "")
 AGENT_TOKEN = os.getenv("AGENT_TOKEN", "")
 LLM_API_KEY = os.getenv("LLM_API_KEY", "")
+
+# OpenClaw gateway runs locally in the same container
+OPENCLAW_GATEWAY_URL = os.getenv("OPENCLAW_GATEWAY_URL", "http://127.0.0.1:18789")
+OPENCLAW_GATEWAY_TOKEN = os.getenv("OPENCLAW_GATEWAY_TOKEN", "")
 
 # ── Schemas ─────────────────────────────────────────────────────────────────
 
@@ -55,21 +59,47 @@ _state: dict = {
 }
 
 
-# ── Task execution (placeholder) ───────────────────────────────────────────
+# ── OpenClaw interaction ───────────────────────────────────────────────────
+
+
+async def _send_to_openclaw(instruction: str, cancel_event: asyncio.Event) -> str:
+    """Send a message to the local OpenClaw gateway and get a response."""
+    async with httpx.AsyncClient(timeout=300) as client:
+        # Send the task instruction to OpenClaw's chat API
+        resp = await client.post(
+            f"{OPENCLAW_GATEWAY_URL}/api/v1/chat",
+            json={"message": instruction},
+            headers={"Authorization": f"Bearer {OPENCLAW_GATEWAY_TOKEN}"}
+            if OPENCLAW_GATEWAY_TOKEN
+            else {},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return data.get("response", data.get("message", str(data)))
 
 
 async def _execute_task(task: TaskAssign, cancel_event: asyncio.Event) -> TaskResult:
-    """Execute a task. This is the main extension point for real agent logic."""
+    """Execute a task by forwarding it to the local OpenClaw instance."""
     try:
-        # Placeholder: simulate work in 1-second increments so we can cancel
-        for _ in range(5):
-            if cancel_event.is_set():
-                return TaskResult(
-                    task_id=task.task_id,
-                    status="cancelled",
-                    result="Task was cancelled",
-                )
-            await asyncio.sleep(1)
+        # Check for cancellation before starting
+        if cancel_event.is_set():
+            return TaskResult(
+                task_id=task.task_id,
+                status="cancelled",
+                result="Task was cancelled before execution",
+            )
+
+        # Build the full prompt with role context
+        prompt_parts = []
+        if task.role_context:
+            prompt_parts.append(
+                f"Context for this task: {task.role_context}"
+            )
+        prompt_parts.append(task.instruction)
+        full_prompt = "\n\n".join(prompt_parts)
+
+        # Send to OpenClaw
+        result_text = await _send_to_openclaw(full_prompt, cancel_event)
 
         # Report result back to the platform gateway
         if PLATFORM_GATEWAY_URL:
@@ -80,7 +110,7 @@ async def _execute_task(task: TaskAssign, cancel_event: asyncio.Event) -> TaskRe
                         "task_id": task.task_id,
                         "agent_id": AGENT_ID,
                         "status": "success",
-                        "result": f"Completed task: {task.instruction}",
+                        "result": result_text,
                     },
                     headers={"Authorization": f"Bearer {AGENT_TOKEN}"},
                     timeout=10,
@@ -89,7 +119,13 @@ async def _execute_task(task: TaskAssign, cancel_event: asyncio.Event) -> TaskRe
         return TaskResult(
             task_id=task.task_id,
             status="success",
-            result=f"Completed task: {task.instruction}",
+            result=result_text,
+        )
+    except asyncio.CancelledError:
+        return TaskResult(
+            task_id=task.task_id,
+            status="cancelled",
+            result="Task was cancelled",
         )
     except Exception as exc:
         return TaskResult(
@@ -102,7 +138,8 @@ async def _execute_task(task: TaskAssign, cancel_event: asyncio.Event) -> TaskRe
 async def _run_task(task: TaskAssign, cancel_event: asyncio.Event):
     """Background wrapper that updates state after task completes."""
     try:
-        await _execute_task(task, cancel_event)
+        result = await _execute_task(task, cancel_event)
+        _state["last_result"] = result
     finally:
         _state["status"] = "idle"
         _state["current_task"] = None
@@ -142,9 +179,25 @@ async def cancel_task():
         raise HTTPException(409, "No active task to cancel")
 
     _state["cancel_event"].set()
+    if _state.get("worker"):
+        _state["worker"].cancel()
     return {"cancelled": True, "task_id": _state["current_task"].task_id}
 
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "agent_id": AGENT_ID, "role": AGENT_ROLE}
+    # Also check if OpenClaw gateway is reachable
+    openclaw_ok = False
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            resp = await client.get(f"{OPENCLAW_GATEWAY_URL}/health")
+            openclaw_ok = resp.status_code == 200
+    except Exception:
+        pass
+
+    return {
+        "status": "ok",
+        "agent_id": AGENT_ID,
+        "role": AGENT_ROLE,
+        "openclaw_gateway": "connected" if openclaw_ok else "unavailable",
+    }
