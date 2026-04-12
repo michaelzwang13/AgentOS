@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     platform_host: str = "0.0.0.0"
     platform_port: int = 8000
     platform_gateway_url: str = "http://host.docker.internal:8000/gateway"
-    frontend_url: str = "http://localhost:3000"
+    frontend_url: str = "http://localhost:5173"
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

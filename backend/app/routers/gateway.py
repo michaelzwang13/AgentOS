@@ -1,3 +1,4 @@
+import asyncio
 import time
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
@@ -233,4 +234,206 @@ async def get_slack_messages(user: dict = Depends(get_current_user)):
 @router.delete("/slack/disconnect")
 def disconnect_slack(user: dict = Depends(get_current_user)):
     CredentialStore.delete(user["id"], "slack")
+    return {"ok": True}
+
+
+@router.get("/gmail/messages")
+async def get_gmail_messages(user: dict = Depends(get_current_user)):
+    """Fetch recent inbox messages from the user's connected Gmail account."""
+    cred = CredentialStore.get(user["id"], "gmail")
+    if not cred:
+        return {"connected": False, "emails": []}
+
+    # Token may be stored as dict (access_token + refresh_token) or plain string
+    token_data = cred["token"]
+    if isinstance(token_data, dict):
+        access_token = token_data.get("access_token", "")
+    else:
+        access_token = token_data
+
+    headers = {"Authorization": f"Bearer {access_token}"}
+
+    async with httpx.AsyncClient() as client:
+        list_resp = await client.get(
+            "https://gmail.googleapis.com/gmail/v1/users/me/messages",
+            params={"maxResults": 10, "labelIds": "INBOX"},
+            headers=headers,
+        )
+        if list_resp.status_code == 401:
+            # Try refresh if available
+            if isinstance(token_data, dict) and token_data.get("refresh_token"):
+                from app.config import get_settings
+                settings = get_settings()
+                refresh_resp = await client.post(
+                    "https://oauth2.googleapis.com/token",
+                    data={
+                        "client_id": settings.google_client_id,
+                        "client_secret": settings.google_client_secret,
+                        "refresh_token": token_data["refresh_token"],
+                        "grant_type": "refresh_token",
+                    },
+                )
+                rdata = refresh_resp.json()
+                access_token = rdata.get("access_token")
+                if not access_token:
+                    return {"connected": False, "emails": []}
+                headers = {"Authorization": f"Bearer {access_token}"}
+                list_resp = await client.get(
+                    "https://gmail.googleapis.com/gmail/v1/users/me/messages",
+                    params={"maxResults": 10, "labelIds": "INBOX"},
+                    headers=headers,
+                )
+            else:
+                return {"connected": False, "emails": []}
+
+        if not list_resp.is_success:
+            return {"connected": False, "error": "gmail_api_error"}
+
+        msg_ids = [m["id"] for m in list_resp.json().get("messages", [])]
+
+        emails = []
+        for mid in msg_ids[:10]:
+            msg_resp = await client.get(
+                f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{mid}",
+                params={"format": "full"},
+                headers=headers,
+            )
+            if not msg_resp.is_success:
+                continue
+            msg = msg_resp.json()
+            hdrs = {h["name"].lower(): h["value"] for h in msg.get("payload", {}).get("headers", [])}
+            from_raw = hdrs.get("from", "")
+            from_name = from_raw.split("<")[0].strip().strip('"') if "<" in from_raw else from_raw
+            subject = hdrs.get("subject", "(no subject)")
+            snippet = msg.get("snippet", "")
+            label_ids = msg.get("labelIds", [])
+            is_unread = "UNREAD" in label_ids
+            internal_date = msg.get("internalDate", "0")
+
+            ts = int(internal_date) / 1000
+            now = time.time()
+            diff_mins = int((now - ts) / 60)
+            diff_hours = int((now - ts) / 3600)
+            if diff_mins < 60:
+                time_label = f"{diff_mins}m ago"
+            elif diff_hours < 24:
+                time_label = f"{diff_hours}h ago"
+            else:
+                time_label = datetime.fromtimestamp(ts).strftime("%b %d")
+
+            labels = [l.lower().replace("category_", "") for l in label_ids
+                      if l not in ("INBOX", "UNREAD", "IMPORTANT", "CATEGORY_PERSONAL")][:2]
+
+            emails.append({
+                "id": mid,
+                "from": from_name,
+                "subject": subject,
+                "body": snippet[:300],
+                "time": time_label,
+                "priority": "high" if is_unread else "low",
+                "read": not is_unread,
+                "labels": labels,
+            })
+
+    return {"connected": True, "emails": emails}
+
+
+@router.delete("/gmail/disconnect")
+def disconnect_gmail(user: dict = Depends(get_current_user)):
+    CredentialStore.delete(user["id"], "gmail")
+    return {"ok": True}
+
+
+@router.get("/github/activity")
+async def get_github_activity(user: dict = Depends(get_current_user)):
+    """Fetch GitHub notifications and PRs awaiting review."""
+    cred = CredentialStore.get(user["id"], "github")
+    if not cred:
+        return {"connected": False, "items": []}
+
+    token = cred["token"]
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+    items = []
+    async with httpx.AsyncClient() as client:
+        notif_resp, pr_resp = await asyncio.gather(
+            client.get(
+                "https://api.github.com/notifications",
+                params={"all": "false", "per_page": 15},
+                headers=headers,
+            ),
+            client.get(
+                "https://api.github.com/search/issues",
+                params={"q": "is:pr+is:open+review-requested:@me", "per_page": 10},
+                headers=headers,
+            ),
+        )
+
+        if notif_resp.status_code == 401:
+            return {"connected": False, "items": []}
+
+        reason_map = {
+            "assign": "assigned", "author": "author", "comment": "commented",
+            "mention": "mentioned", "review_requested": "review requested",
+            "subscribed": "subscribed", "team_mention": "team mention",
+        }
+
+        if notif_resp.is_success:
+            for n in notif_resp.json():
+                updated = n.get("updated_at", "")
+                ts = datetime.fromisoformat(updated.replace("Z", "+00:00")) if updated else datetime.now()
+                diff = datetime.now(ts.tzinfo) - ts
+                diff_mins = int(diff.total_seconds() / 60)
+                diff_hours = int(diff.total_seconds() / 3600)
+                if diff_mins < 60:
+                    time_label = f"{diff_mins}m ago"
+                elif diff_hours < 24:
+                    time_label = f"{diff_hours}h ago"
+                else:
+                    time_label = ts.strftime("%b %d")
+
+                items.append({
+                    "id": f"notif-{n['id']}",
+                    "repo": n.get("repository", {}).get("full_name", ""),
+                    "title": n.get("subject", {}).get("title", ""),
+                    "type": n.get("subject", {}).get("type", "").replace("PullRequest", "PR"),
+                    "reason": reason_map.get(n.get("reason", ""), n.get("reason", "")),
+                    "time": time_label,
+                    "unread": n.get("unread", False),
+                })
+
+        if pr_resp.is_success:
+            pr_data = pr_resp.json()
+            for pr in pr_data.get("items", []):
+                already = any(i["title"] == pr["title"] for i in items)
+                if not already:
+                    updated = pr.get("updated_at", "")
+                    ts = datetime.fromisoformat(updated.replace("Z", "+00:00")) if updated else datetime.now()
+                    diff = datetime.now(ts.tzinfo) - ts
+                    diff_hours = int(diff.total_seconds() / 3600)
+                    time_label = f"{diff_hours}h ago" if diff_hours < 24 else ts.strftime("%b %d")
+
+                    items.append({
+                        "id": f"pr-{pr['id']}",
+                        "repo": pr.get("repository_url", "").split("repos/")[-1],
+                        "title": pr["title"],
+                        "type": "PR",
+                        "reason": "review requested",
+                        "time": time_label,
+                        "unread": True,
+                        "author": pr.get("user", {}).get("login", ""),
+                        "state": "draft" if pr.get("draft") else pr.get("state", "open"),
+                    })
+
+    items.sort(key=lambda x: (0 if x.get("unread") else 1))
+    return {"connected": True, "items": items[:20]}
+
+
+@router.delete("/github/disconnect")
+def disconnect_github(user: dict = Depends(get_current_user)):
+    CredentialStore.delete(user["id"], "github")
     return {"ok": True}

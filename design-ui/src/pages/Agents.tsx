@@ -1,9 +1,18 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { DockNav } from '@/components/ui/dock-nav'
+import {
+  isLoggedIn,
+  fetchSlackMessages,
+  fetchGmailMessages,
+  fetchGithubActivity,
+  disconnectService,
+  oauthUrl,
+  streamChat,
+} from '@/lib/api'
 
 /* ═══════════════════════════════════════════
-   AGENTS — Signal Feed + Query
+   AGENTS — Signal Feed + Query (Live)
    ═══════════════════════════════════════════ */
 
 // ── Types ──────────────────────────────────
@@ -19,7 +28,7 @@ interface GithubItem {
 interface ChatMsg { role: 'user' | 'assistant'; content: string }
 type Tab = 'slack' | 'gmail' | 'github'
 
-// ── Mock data ───────────────────────────────
+// ── Mock data (fallback) ───────────────────
 const MOCK_SLACK: SlackMessage[] = [
   { id: 's1', user: 'Sarah Chen',    text: 'Blocked on pricing page copy — marketing hasn\'t signed off. Can you get Alex to approve by EOD?', channel: 'launch',  time: '9:14 AM',   priority: 'high',   read: false },
   { id: 's2', user: 'Marcus Rivera', text: 'Pushed the hotfix. Monitoring now.',                                                                channel: 'on-call', time: '8:52 AM',   priority: 'high',   read: false },
@@ -58,6 +67,18 @@ export default function Agents() {
   const [tab, setTab]     = useState<Tab>('slack')
   const [clock, setClock] = useState('')
 
+  // Connection states
+  const [slackConn,  setSlackConn]  = useState(false)
+  const [gmailConn,  setGmailConn]  = useState(false)
+  const [githubConn, setGithubConn] = useState(false)
+
+  // Data states
+  const [slackData,  setSlackData]  = useState<SlackMessage[]>(MOCK_SLACK)
+  const [gmailData,  setGmailData]  = useState<Email[]>(MOCK_GMAIL)
+  const [githubData, setGithubData] = useState<GithubItem[]>(MOCK_GITHUB)
+  const [feedLoading, setFeedLoading] = useState(true)
+
+  // Chat states
   const [messages,  setMessages]  = useState<ChatMsg[]>([])
   const [input,     setInput]     = useState('')
   const [streaming, setStreaming] = useState(false)
@@ -72,19 +93,63 @@ export default function Agents() {
     return () => clearInterval(iv)
   }, [])
 
+  // Fetch live feeds on mount
+  useEffect(() => {
+    if (!isLoggedIn()) {
+      setFeedLoading(false)
+      return
+    }
+    Promise.allSettled([
+      fetchSlackMessages().then(d => {
+        if (d.connected && d.messages?.length) { setSlackConn(true); setSlackData(d.messages) }
+      }),
+      fetchGmailMessages().then(d => {
+        if (d.connected && d.emails?.length) { setGmailConn(true); setGmailData(d.emails) }
+      }),
+      fetchGithubActivity().then(d => {
+        if (d.connected && d.items?.length) { setGithubConn(true); setGithubData(d.items) }
+      }),
+    ]).finally(() => setFeedLoading(false))
+  }, [])
+
+  // Handle OAuth redirect params
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search)
+    if (p.get('connected') === 'true' || p.get('connected') === 'slack') {
+      fetchSlackMessages().then(d => { if (d.connected) { setSlackConn(true); setSlackData(d.messages) } })
+    }
+    if (p.get('gmail_connected')) {
+      fetchGmailMessages().then(d => { if (d.connected) { setGmailConn(true); setGmailData(d.emails) } })
+    }
+    if (p.get('github_connected')) {
+      fetchGithubActivity().then(d => { if (d.connected) { setGithubConn(true); setGithubData(d.items) } })
+    }
+    if (p.toString()) window.history.replaceState({}, '', '/agents')
+  }, [])
+
   // reset chat on tab switch
   useEffect(() => { setMessages([]); setInput('') }, [tab])
 
   // scroll to bottom
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
-  const feedData = tab === 'slack' ? MOCK_SLACK : tab === 'gmail' ? MOCK_GMAIL : MOCK_GITHUB
-  const unreadCount = feedData.filter(i => 'read' in i ? !i.read : (i as GithubItem).unread).length
+  const connected = tab === 'slack' ? slackConn : tab === 'gmail' ? gmailConn : githubConn
+  const feedData = tab === 'slack' ? slackData : tab === 'gmail' ? gmailData : githubData
+  const unreadCount = (items: typeof feedData) => items.filter(i => 'read' in i ? !i.read : (i as GithubItem).unread).length
+
+  const connectHref = oauthUrl(tab)
 
   const getContext = useCallback(
-    () => buildContext(tab, MOCK_SLACK, MOCK_GMAIL, MOCK_GITHUB),
-    [tab]
+    () => buildContext(tab, slackData, gmailData, githubData),
+    [tab, slackData, gmailData, githubData]
   )
+
+  async function handleDisconnect() {
+    await disconnectService(tab as 'slack' | 'gmail' | 'github')
+    if (tab === 'slack')  { setSlackConn(false);  setSlackData(MOCK_SLACK)   }
+    if (tab === 'gmail')  { setGmailConn(false);  setGmailData(MOCK_GMAIL)   }
+    if (tab === 'github') { setGithubConn(false); setGithubData(MOCK_GITHUB) }
+  }
 
   async function sendMessage(e: React.FormEvent) {
     e.preventDefault()
@@ -96,24 +161,14 @@ export default function Agents() {
     setStreaming(true)
     setMessages(m => [...m, { role: 'assistant', content: '' }])
     try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          agentId: tab,
-          context: getContext(),
-          messages: next.map(m => ({ role: m.role, content: m.content })),
-        }),
-      })
-      const reader = res.body!.getReader()
-      const dec = new TextDecoder()
-      let full = ''
-      for (;;) {
-        const { done, value } = await reader.read()
-        if (done) break
-        full += dec.decode(value, { stream: true })
-        setMessages(m => { const u = [...m]; u[u.length - 1] = { role: 'assistant', content: full }; return u })
-      }
+      await streamChat(
+        tab,
+        getContext(),
+        next.map(m => ({ role: m.role, content: m.content })),
+        (full) => setMessages(m => { const u = [...m]; u[u.length - 1] = { role: 'assistant', content: full }; return u }),
+      )
+    } catch (err) {
+      setMessages(m => { const u = [...m]; u[u.length - 1] = { role: 'assistant', content: `Error: ${err}` }; return u })
     } finally {
       setStreaming(false)
       setTimeout(() => inputRef.current?.focus(), 50)
@@ -138,9 +193,24 @@ export default function Agents() {
           style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <span className="font-display" style={{ fontSize: 11, color: 'var(--accent)', letterSpacing: '0.15em' }}>
-              OPENCLAW / AGENT OPS
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span className="font-display" style={{ fontSize: 11, color: 'var(--accent)', letterSpacing: '0.15em' }}>
+                OPENCLAW / AGENT OPS
+              </span>
+              {/* connection dots */}
+              <div style={{ display: 'flex', gap: 6, marginLeft: 4 }}>
+                {[
+                  { code: 'SLK', live: slackConn },
+                  { code: 'GML', live: gmailConn },
+                  { code: 'GHB', live: githubConn },
+                ].map(({ code, live }) => (
+                  <div key={code} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <div style={{ width: 5, height: 5, borderRadius: '50%', background: live ? 'var(--accent)' : 'var(--status-idle)', animation: live ? 'pulse-status 1.5s ease-in-out infinite' : 'none' }} />
+                    <span className="font-system" style={{ fontSize: 8, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>{code}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
             <h1 className="font-display" style={{ fontSize: 38, color: 'var(--text-primary)', letterSpacing: '0.04em', lineHeight: 1.1 }}>
               SIGNAL FEED
             </h1>
@@ -159,8 +229,8 @@ export default function Agents() {
           style={{ display: 'flex', borderBottom: '1px solid var(--border-default)', gap: 0 }}
         >
           {TABS.map(t => {
-            const data = t.id === 'slack' ? MOCK_SLACK : t.id === 'gmail' ? MOCK_GMAIL : MOCK_GITHUB
-            const n = data.filter(i => 'read' in i ? !i.read : (i as GithubItem).unread).length
+            const data = t.id === 'slack' ? slackData : t.id === 'gmail' ? gmailData : githubData
+            const n = unreadCount(data)
             const active = tab === t.id
             return (
               <button
@@ -208,100 +278,124 @@ export default function Agents() {
                 <span className="font-display" style={{ fontSize: 12, color: 'var(--accent)', letterSpacing: '0.12em' }}>
                   {tab.toUpperCase()} FEED
                 </span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--status-idle)' }} />
-                  <span className="font-system" style={{ fontSize: 10, color: '#555', letterSpacing: '0.1em' }}>DEMO</span>
-                  <a
-                    href={`http://localhost:3000/api/auth/${tab === 'github' ? 'github' : tab}`}
-                    className="font-display"
-                    style={{ marginLeft: 8, fontSize: 10, color: 'var(--accent)', letterSpacing: '0.1em', padding: '4px 12px', border: '1px solid var(--accent)', borderRadius: 'var(--radius-sm)', transition: 'background 150ms' }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--accent-dim)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                  >
-                    CONNECT
-                  </a>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: connected ? 'var(--accent)' : 'var(--status-idle)', animation: connected ? 'pulse-status 1.5s ease-in-out infinite' : 'none' }} />
+                    <span className="font-system" style={{ fontSize: 10, color: '#555', letterSpacing: '0.1em' }}>
+                      {connected ? 'LIVE' : 'DEMO'}
+                    </span>
+                  </div>
+                  {!connected ? (
+                    <a
+                      href={connectHref}
+                      className="font-display"
+                      style={{ fontSize: 10, color: 'var(--accent)', letterSpacing: '0.1em', padding: '4px 12px', border: '1px solid var(--accent)', borderRadius: 'var(--radius-sm)', transition: 'background 150ms' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--accent-dim)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      CONNECT
+                    </a>
+                  ) : (
+                    <button
+                      onClick={handleDisconnect}
+                      className="font-system"
+                      style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: '0.1em' }}
+                    >
+                      DISCONNECT
+                    </button>
+                  )}
                 </div>
               </div>
 
               {/* items */}
-              <div style={{ overflowY: 'auto', flex: 1 }}>
-                {tab === 'slack' && MOCK_SLACK.map((msg, i) => (
-                  <motion.div
-                    key={msg.id}
-                    initial={{ opacity: 0, x: -8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.05, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-                    style={{ padding: '18px 28px', borderBottom: '1px solid var(--surface-raised)', borderLeft: !msg.read ? '2px solid var(--accent)' : '2px solid transparent', transition: 'background 120ms' }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-raised)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span className="font-display" style={{ fontSize: 13, color: !msg.read ? 'var(--text-primary)' : '#AAAAAA' }}>{msg.user}</span>
-                        <span className="font-system" style={{ fontSize: 9, color: 'var(--accent)', background: 'var(--accent-dim)', borderRadius: 4, padding: '2px 7px', letterSpacing: '0.06em' }}>#{msg.channel}</span>
-                        {msg.priority === 'high' && <span className="font-system" style={{ fontSize: 9, color: 'var(--status-error)', letterSpacing: '0.1em' }}>URGENT</span>}
+              {feedLoading ? (
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {[0, 150, 300].map(d => (
+                      <div key={d} style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--text-muted)', animation: `pulse-status 1.2s ease-in-out ${d}ms infinite` }} />
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div style={{ overflowY: 'auto', flex: 1 }}>
+                  {tab === 'slack' && slackData.map((msg, i) => (
+                    <motion.div
+                      key={msg.id}
+                      initial={{ opacity: 0, x: -8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.05, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                      style={{ padding: '18px 28px', borderBottom: '1px solid var(--surface-raised)', borderLeft: !msg.read ? '2px solid var(--accent)' : '2px solid transparent', transition: 'background 120ms' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-raised)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span className="font-display" style={{ fontSize: 13, color: !msg.read ? 'var(--text-primary)' : '#AAAAAA' }}>{msg.user}</span>
+                          <span className="font-system" style={{ fontSize: 9, color: 'var(--accent)', background: 'var(--accent-dim)', borderRadius: 4, padding: '2px 7px', letterSpacing: '0.06em' }}>#{msg.channel}</span>
+                          {msg.priority === 'high' && <span className="font-system" style={{ fontSize: 9, color: 'var(--status-error)', letterSpacing: '0.1em' }}>URGENT</span>}
+                        </div>
+                        <span className="font-system" style={{ fontSize: 10, color: '#666' }}>{msg.time}</span>
                       </div>
-                      <span className="font-system" style={{ fontSize: 10, color: '#666' }}>{msg.time}</span>
-                    </div>
-                    <p className="font-narrative" style={{ margin: 0, fontSize: 14, color: '#AAAAAA', lineHeight: 1.65 }}>{msg.text}</p>
-                  </motion.div>
-                ))}
+                      <p className="font-narrative" style={{ margin: 0, fontSize: 14, color: '#AAAAAA', lineHeight: 1.65 }}>{msg.text}</p>
+                    </motion.div>
+                  ))}
 
-                {tab === 'gmail' && MOCK_GMAIL.map((email, i) => (
-                  <motion.div
-                    key={email.id}
-                    initial={{ opacity: 0, x: -8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.05, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-                    style={{ padding: '16px 24px', borderBottom: '1px solid var(--surface-raised)', borderLeft: !email.read ? '2px solid var(--accent)' : '2px solid transparent', transition: 'background 120ms' }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-raised)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span className="font-display" style={{ fontSize: 13, color: !email.read ? 'var(--text-primary)' : '#AAAAAA' }}>{email.from}</span>
-                        {email.priority === 'high' && <span className="font-system" style={{ fontSize: 9, color: 'var(--status-error)', letterSpacing: '0.1em' }}>URGENT</span>}
+                  {tab === 'gmail' && gmailData.map((email, i) => (
+                    <motion.div
+                      key={email.id}
+                      initial={{ opacity: 0, x: -8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.05, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                      style={{ padding: '16px 24px', borderBottom: '1px solid var(--surface-raised)', borderLeft: !email.read ? '2px solid var(--accent)' : '2px solid transparent', transition: 'background 120ms' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-raised)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span className="font-display" style={{ fontSize: 13, color: !email.read ? 'var(--text-primary)' : '#AAAAAA' }}>{email.from}</span>
+                          {email.priority === 'high' && <span className="font-system" style={{ fontSize: 9, color: 'var(--status-error)', letterSpacing: '0.1em' }}>URGENT</span>}
+                        </div>
+                        <span className="font-system" style={{ fontSize: 10, color: '#666' }}>{email.time}</span>
                       </div>
-                      <span className="font-system" style={{ fontSize: 10, color: '#666' }}>{email.time}</span>
-                    </div>
-                    <p className="font-display" style={{ margin: '0 0 5px', fontSize: 12, color: !email.read ? 'var(--text-primary)' : '#AAAAAA', letterSpacing: '0.03em' }}>{email.subject}</p>
-                    <p className="font-narrative" style={{ margin: '0 0 10px', fontSize: 13, color: '#777', lineHeight: 1.6 }}>{email.body}</p>
-                    {email.labels.length > 0 && (
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        {email.labels.map(l => (
-                          <span key={l} className="font-system" style={{ fontSize: 9, color: '#666', background: 'var(--surface-raised)', border: '1px solid var(--border-default)', borderRadius: 4, padding: '2px 7px' }}>{l}</span>
-                        ))}
-                      </div>
-                    )}
-                  </motion.div>
-                ))}
+                      <p className="font-display" style={{ margin: '0 0 5px', fontSize: 12, color: !email.read ? 'var(--text-primary)' : '#AAAAAA', letterSpacing: '0.03em' }}>{email.subject}</p>
+                      <p className="font-narrative" style={{ margin: '0 0 10px', fontSize: 13, color: '#777', lineHeight: 1.6 }}>{email.body}</p>
+                      {email.labels.length > 0 && (
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          {email.labels.map(l => (
+                            <span key={l} className="font-system" style={{ fontSize: 9, color: '#666', background: 'var(--surface-raised)', border: '1px solid var(--border-default)', borderRadius: 4, padding: '2px 7px' }}>{l}</span>
+                          ))}
+                        </div>
+                      )}
+                    </motion.div>
+                  ))}
 
-                {tab === 'github' && MOCK_GITHUB.map((item, i) => (
-                  <motion.div
-                    key={item.id}
-                    initial={{ opacity: 0, x: -8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.05, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-                    style={{ padding: '16px 24px', borderBottom: '1px solid var(--surface-raised)', borderLeft: item.unread ? '2px solid var(--accent)' : '2px solid transparent', transition: 'background 120ms' }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-raised)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span className="font-system" style={{ fontSize: 9, color: item.type === 'PR' ? '#00DD77' : '#AAAAAA', border: `1px solid ${item.type === 'PR' ? '#00DD77' : 'var(--border-default)'}`, borderRadius: 4, padding: '2px 6px', letterSpacing: '0.06em' }}>{item.type}</span>
-                        <span className="font-system" style={{ fontSize: 10, color: 'var(--accent)' }}>{item.repo}</span>
-                        {item.state === 'draft' && <span className="font-system" style={{ fontSize: 9, color: '#555', letterSpacing: '0.08em' }}>DRAFT</span>}
+                  {tab === 'github' && githubData.map((item, i) => (
+                    <motion.div
+                      key={item.id}
+                      initial={{ opacity: 0, x: -8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.05, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                      style={{ padding: '16px 24px', borderBottom: '1px solid var(--surface-raised)', borderLeft: item.unread ? '2px solid var(--accent)' : '2px solid transparent', transition: 'background 120ms' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-raised)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span className="font-system" style={{ fontSize: 9, color: item.type === 'PR' ? '#00DD77' : '#AAAAAA', border: `1px solid ${item.type === 'PR' ? '#00DD77' : 'var(--border-default)'}`, borderRadius: 4, padding: '2px 6px', letterSpacing: '0.06em' }}>{item.type}</span>
+                          <span className="font-system" style={{ fontSize: 10, color: 'var(--accent)' }}>{item.repo}</span>
+                          {item.state === 'draft' && <span className="font-system" style={{ fontSize: 9, color: '#555', letterSpacing: '0.08em' }}>DRAFT</span>}
+                        </div>
+                        <span className="font-system" style={{ fontSize: 10, color: '#666' }}>{item.time}</span>
                       </div>
-                      <span className="font-system" style={{ fontSize: 10, color: '#666' }}>{item.time}</span>
-                    </div>
-                    <p className="font-narrative" style={{ margin: '0 0 7px', fontSize: 14, color: item.unread ? 'var(--text-primary)' : '#AAAAAA', lineHeight: 1.55 }}>{item.title}</p>
-                    <div style={{ display: 'flex', gap: 14 }}>
-                      <span className="font-system" style={{ fontSize: 10, color: '#666' }}>{item.reason}</span>
-                      {item.author && <span className="font-system" style={{ fontSize: 10, color: '#666' }}>@{item.author}</span>}
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
+                      <p className="font-narrative" style={{ margin: '0 0 7px', fontSize: 14, color: item.unread ? 'var(--text-primary)' : '#AAAAAA', lineHeight: 1.55 }}>{item.title}</p>
+                      <div style={{ display: 'flex', gap: 14 }}>
+                        <span className="font-system" style={{ fontSize: 10, color: '#666' }}>{item.reason}</span>
+                        {item.author && <span className="font-system" style={{ fontSize: 10, color: '#666' }}>@{item.author}</span>}
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* ── Query panel ── */}

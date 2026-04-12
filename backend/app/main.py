@@ -3,7 +3,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import users, agents, gateway, credentials, tasks, roles, auth
+from app.routers import users, agents, gateway, credentials, tasks, roles, auth, chat
 
 app = FastAPI(
     title="AgentOS Platform",
@@ -33,6 +33,7 @@ app.include_router(gateway.router)
 app.include_router(tasks.router)
 app.include_router(roles.router)
 app.include_router(auth.router)
+app.include_router(chat.router)
 
 
 @app.get("/health")
