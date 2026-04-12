@@ -146,7 +146,7 @@ The backend engineer is in parallel adding:
 
 1. **Role templates:** `backend/agent-config/templates/code-review-engineer.yaml` and `customer-support.yaml`. Only `secretary.yaml` exists today. Until those land, hiring will fail because the orchestrator won't find the template.
 2. **`GET /roles` endpoint** returning the list of hireable templates. You can work ahead of this by stubbing `/api/directory` from `lib/employees.ts`.
-3. **Real GitHub OAuth app registration** + backend redirect/callback handler. You can build the frontend consent-step UI against a mock URL and swap it when the real redirect URL is ready.
+3. **Real GitHub OAuth app registration.** Kevin will register the app at github.com/settings/developers and hand you the client ID + client secret as env vars (`GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`) for your Next.js API routes. **The backend does NOT own the OAuth dance** — there's no backend redirect/callback router and there isn't going to be one. Your `/api/credentials/github/connect` route builds the GitHub consent URL, `/api/credentials/github/callback` exchanges the code for a token and then POSTs it to the backend's existing `/credentials` endpoint (which already accepts raw tokens — see `backend/app/routers/credentials.py`). You can build the consent-step UI against a mock URL and swap it when the client ID/secret are ready.
 
 If any of these block you, build the surface assuming the final shape and leave a TODO. The hackathon is about shipping the walkable flow.
 
