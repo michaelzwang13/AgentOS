@@ -13,7 +13,10 @@ app = FastAPI(
 
 # The Next.js hire-flow UI runs on a different origin (localhost:3000 in dev,
 # configurable for deploys via CORS_ALLOWED_ORIGINS=comma,separated).
-_cors_env = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000")
+_cors_env = os.getenv(
+    "CORS_ALLOWED_ORIGINS",
+    "http://localhost:3000,http://localhost:5173,http://localhost:5174",
+)
 _cors_origins = [o.strip() for o in _cors_env.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,

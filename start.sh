@@ -88,19 +88,30 @@ fi
 
 # ─── Backend: install deps + start ──────────────────────────────────
 
-info "Installing backend dependencies..."
+info "Setting up backend venv..."
 cd "$BACKEND"
-$PYTHON -m pip install -e ".[dev]" -q 2>/dev/null || $PYTHON -m pip install -e . -q
+VENV="$BACKEND/.venv"
+if [ ! -d "$VENV" ]; then
+    $PYTHON -m venv "$VENV"
+    log "Created venv at backend/.venv"
+else
+    log "Using existing venv at backend/.venv"
+fi
+VENV_PY="$VENV/bin/python"
+
+info "Installing backend dependencies..."
+"$VENV_PY" -m pip install --upgrade pip -q
+"$VENV_PY" -m pip install -e ".[dev]" -q 2>/dev/null || "$VENV_PY" -m pip install -e . -q
 log "Backend dependencies installed"
 
-info "Starting backend on http://localhost:8000 ..."
-cd "$BACKEND"
-$PYTHON -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload &
+BACKEND_PORT="${BACKEND_PORT:-8000}"
+info "Starting backend on http://localhost:$BACKEND_PORT ..."
+"$VENV_PY" -m uvicorn app.main:app --host 0.0.0.0 --port "$BACKEND_PORT" --reload &
 BACKEND_PID=$!
 
 # Wait for backend to be ready
 for i in {1..15}; do
-    if curl -sf http://localhost:8000/health >/dev/null 2>&1; then
+    if curl -sf "http://localhost:$BACKEND_PORT/health" >/dev/null 2>&1; then
         log "Backend is up"
         break
     fi
