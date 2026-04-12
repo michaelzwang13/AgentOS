@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
 
   if (error || !code) {
     return NextResponse.redirect(
-      `${BASE_URL}/test?github_error=${error || "missing_code"}`
+      `${BASE_URL}/agents?github_error=${error || "missing_code"}`
     );
   }
 
@@ -32,11 +32,11 @@ export async function GET(req: NextRequest) {
 
   if (data.error || !data.access_token) {
     return NextResponse.redirect(
-      `${BASE_URL}/test?github_error=${data.error || "token_failed"}`
+      `${BASE_URL}/agents?github_error=${data.error || "token_failed"}`
     );
   }
 
-  const response = NextResponse.redirect(`${BASE_URL}/test?github_connected=true`);
+  const response = NextResponse.redirect(`${BASE_URL}/agents?github_connected=true`);
   response.cookies.set("github_token", data.access_token, {
     httpOnly: true,
     secure: true,

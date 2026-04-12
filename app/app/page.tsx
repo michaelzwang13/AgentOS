@@ -1,4 +1,5 @@
 import { employees } from "@/lib/employees";
+import Link from "next/link";
 
 export default function HomePage() {
   return (
@@ -39,16 +40,13 @@ export default function HomePage() {
         </ul>
       </section>
 
-      <section className="border border-dashed rounded-lg p-6 text-sm text-muted-foreground space-y-2">
-        <div className="font-semibold text-foreground">
-          Frontend handoff in progress
-        </div>
-        <div>
-          This page is a placeholder. The hire flow build brief lives at{" "}
-          <code className="bg-muted px-1.5 py-0.5 rounded">app/HANDOFF.md</code>.
-          Read that first, then build out <code>/directory</code>,{" "}
-          <code>/directory/[role]</code>, and <code>/hire/[role]</code>.
-        </div>
+      <section className="flex gap-3">
+        <Link href="/agents" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors">
+          Open Agent Operations →
+        </Link>
+        <Link href="/test" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border text-sm text-muted-foreground hover:bg-accent transition-colors">
+          Test Surface
+        </Link>
       </section>
     </div>
   );

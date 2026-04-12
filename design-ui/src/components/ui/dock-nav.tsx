@@ -9,6 +9,7 @@ import {
   TerminalSquare,
   Tv,
   Cpu,
+  Radio,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 
@@ -19,12 +20,13 @@ interface DockItem {
 }
 
 const navItems: DockItem[] = [
-  { icon: Home, label: "Index", path: "/" },
-  { icon: Monitor, label: "Control", path: "/1" },
-  { icon: PlaneTakeoff, label: "Departures", path: "/2" },
-  { icon: TerminalSquare, label: "Terminal", path: "/3" },
-  { icon: Tv, label: "Broadcast", path: "/4" },
-  { icon: Cpu, label: "Schematic", path: "/5" },
+  { icon: Home,          label: "Index",     path: "/"       },
+  { icon: Radio,         label: "Agents",    path: "/agents" },
+  { icon: Monitor,       label: "Control",   path: "/1"      },
+  { icon: PlaneTakeoff,  label: "Departures",path: "/2"      },
+  { icon: TerminalSquare,label: "Terminal",  path: "/3"      },
+  { icon: Tv,            label: "Broadcast", path: "/4"      },
+  { icon: Cpu,           label: "Schematic", path: "/5"      },
 ]
 
 const floatingAnimation = {

@@ -128,3 +128,59 @@
     @apply font-sans;
   }
 }
+
+/* ── Retro-Futurist Signal Design System ── */
+.rf-page {
+  /* surfaces */
+  --black: #000000;
+  --surface: #111111;
+  --surface-raised: #1A1A1A;
+  --surface-overlay: #0A0A0A;
+  /* borders */
+  --border-default: #222222;
+  --border-hover: #555555;
+  --border-active: #FF8000;
+  /* accent */
+  --accent: #FF8000;
+  --accent-dim: rgba(255,128,0,0.12);
+  --accent-glow: rgba(255,128,0,0.3);
+  /* text */
+  --text-primary: #FFFFFF;
+  --text-secondary: #888888;
+  --text-muted: #4A4A4A;
+  /* status */
+  --status-active: #FF8000;
+  --status-error: #FF4444;
+  --status-idle: #333333;
+  --success: #00DD77;
+  /* typography */
+  --font-display: 'Courier New', monospace;
+  --font-narrative: 'Courier Prime', 'Courier New', monospace;
+  --font-system: 'JetBrains Mono', ui-monospace, monospace;
+  /* radii */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+
+  background: var(--black);
+  color: var(--text-primary);
+  min-height: 100vh;
+  font-family: var(--font-system);
+}
+
+/* dot-grid background (matches design-ui) */
+.rf-page {
+  background-image: radial-gradient(circle, rgba(255,255,255,0.04) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+@keyframes pulse-status {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 var(--accent-glow); }
+  50%       { opacity: 0.7; box-shadow: 0 0 0 4px transparent; }
+}
+
+@keyframes rf-blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}

@@ -4,11 +4,12 @@ import { motion } from 'framer-motion'
 import { DockNav } from '@/components/ui/dock-nav'
 
 const designs = [
-  { id: 1, label: 'CTRL_01', title: 'Mission Control', desc: 'Command center dashboard' },
-  { id: 2, label: 'DPRT_02', title: 'Departure Board', desc: 'Split-flap directory' },
-  { id: 3, label: 'TERM_03', title: 'The Terminal', desc: 'CRT command interface' },
-  { id: 4, label: 'BCST_04', title: 'Broadcast', desc: 'TV studio monitor wall' },
-  { id: 5, label: 'SCHM_05', title: 'The Schematic', desc: 'Circuit blueprint' },
+  { id: 'agents', label: 'AGNT_00', title: 'Signal Feed',     desc: 'Live agent dashboard — Slack, Gmail, GitHub', primary: true },
+  { id: 1,        label: 'CTRL_01', title: 'Mission Control', desc: 'Command center dashboard' },
+  { id: 2,        label: 'DPRT_02', title: 'Departure Board', desc: 'Split-flap directory' },
+  { id: 3,        label: 'TERM_03', title: 'The Terminal',    desc: 'CRT command interface' },
+  { id: 4,        label: 'BCST_04', title: 'Broadcast',       desc: 'TV studio monitor wall' },
+  { id: 5,        label: 'SCHM_05', title: 'The Schematic',   desc: 'Circuit blueprint' },
 ]
 
 export default function Home() {
@@ -60,24 +61,24 @@ export default function Home() {
               transition={{ delay: 0.15 + i * 0.06, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
             >
               <Link
-                to={`/${d.id}`}
+                to={d.id === 'agents' ? '/agents' : `/${d.id}`}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   padding: '20px 24px',
-                  background: 'var(--surface)',
+                  background: (d as {primary?: boolean}).primary ? 'var(--accent-dim)' : 'var(--surface)',
                   borderRadius: 'var(--radius-lg)',
-                  border: '1px solid var(--border-default)',
+                  border: (d as {primary?: boolean}).primary ? '1px solid var(--accent)' : '1px solid var(--border-default)',
                   transition: 'border-color 150ms ease-out, background 150ms ease-out',
                 }}
                 onMouseEnter={e => {
-                  e.currentTarget.style.borderColor = 'var(--border-hover)'
+                  e.currentTarget.style.borderColor = (d as {primary?: boolean}).primary ? 'var(--text-primary)' : 'var(--border-hover)'
                   e.currentTarget.style.background = 'var(--surface-raised)'
                 }}
                 onMouseLeave={e => {
-                  e.currentTarget.style.borderColor = 'var(--border-default)'
-                  e.currentTarget.style.background = 'var(--surface)'
+                  e.currentTarget.style.borderColor = (d as {primary?: boolean}).primary ? 'var(--accent)' : 'var(--border-default)'
+                  e.currentTarget.style.background = (d as {primary?: boolean}).primary ? 'var(--accent-dim)' : 'var(--surface)'
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>

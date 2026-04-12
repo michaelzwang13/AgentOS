@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
   const error = req.nextUrl.searchParams.get("error");
 
   if (error || !code) {
-    return NextResponse.redirect(`${BASE_URL}/test?gmail_error=${error || "missing_code"}`);
+    return NextResponse.redirect(`${BASE_URL}/agents?gmail_error=${error || "missing_code"}`);
   }
 
   const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
@@ -28,10 +28,10 @@ export async function GET(req: NextRequest) {
   const data = await tokenRes.json();
 
   if (data.error || !data.access_token) {
-    return NextResponse.redirect(`${BASE_URL}/test?gmail_error=${data.error || "token_failed"}`);
+    return NextResponse.redirect(`${BASE_URL}/agents?gmail_error=${data.error || "token_failed"}`);
   }
 
-  const response = NextResponse.redirect(`${BASE_URL}/test?gmail_connected=true`);
+  const response = NextResponse.redirect(`${BASE_URL}/agents?gmail_connected=true`);
   response.cookies.set("gmail_token", data.access_token, {
     httpOnly: true,
     secure: true,
