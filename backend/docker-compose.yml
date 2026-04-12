@@ -1,0 +1,17 @@
+services:
+  platform:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./agent-config:/app/agent-config:ro
+    networks:
+      - openclaw
+
+networks:
+  openclaw:
+    name: openclaw-agents
+    driver: bridge
