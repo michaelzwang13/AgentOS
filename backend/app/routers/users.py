@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from app.models.user import UserModel
-from app.schemas.user import UserCreate, UserResponse, UserListResponse
+from app.schemas.user import UserCreate, UserLogin, UserResponse, UserListResponse
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -11,6 +11,17 @@ def create_user(payload: UserCreate):
     if existing:
         raise HTTPException(409, "User with this email already exists")
     return UserModel.create(payload.email, payload.name)
+
+
+@router.post("/login", response_model=UserResponse)
+def login(payload: UserLogin):
+    """Hackathon-grade login: look up an existing user by email and return their
+    API key so the frontend can rehydrate state across sessions. No password — the
+    user's email is the sole credential. Good enough for local-only demos."""
+    user = UserModel.get_by_email(payload.email)
+    if not user:
+        raise HTTPException(404, "No account with that email. Sign up first.")
+    return user
 
 
 @router.get("", response_model=list[UserListResponse])

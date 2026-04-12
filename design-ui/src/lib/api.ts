@@ -44,6 +44,19 @@ export async function signup(email: string, name: string) {
   return data
 }
 
+export async function login(email: string) {
+  const res = await fetch(url('/users/login'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.detail || 'Login failed')
+  localStorage.setItem('openclaw_api_key', data.api_key)
+  localStorage.setItem('openclaw_user', JSON.stringify(data))
+  return data
+}
+
 export function logout() {
   localStorage.removeItem('openclaw_api_key')
   localStorage.removeItem('openclaw_user')
