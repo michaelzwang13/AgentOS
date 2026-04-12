@@ -89,12 +89,18 @@ fi
 
 info "Installing backend dependencies..."
 cd "$BACKEND"
-$PYTHON -m pip install fastapi uvicorn httpx pydantic-settings cryptography supabase anthropic docker pyyaml -q 2>/dev/null
+if [ ! -d ".venv" ]; then
+    $PYTHON -m venv .venv
+    log "Created Python virtual environment"
+fi
+source .venv/bin/activate
+pip install fastapi uvicorn httpx pydantic-settings cryptography supabase anthropic docker pyyaml -q 2>/dev/null || \
+    pip install fastapi uvicorn httpx pydantic-settings cryptography supabase anthropic docker pyyaml
 log "Backend dependencies installed"
 
 BACKEND_PORT="${BACKEND_PORT:-8000}"
 info "Starting backend on http://localhost:$BACKEND_PORT ..."
-$PYTHON -m uvicorn app.main:app --host 0.0.0.0 --port "$BACKEND_PORT" --reload &
+python -m uvicorn app.main:app --host 0.0.0.0 --port "$BACKEND_PORT" --reload &
 BACKEND_PID=$!
 
 # Wait for backend to be ready
