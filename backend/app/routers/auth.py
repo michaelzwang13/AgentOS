@@ -9,6 +9,12 @@ from app.services.credential_store import CredentialStore
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+# Compat router for callback URLs that were registered with OAuth providers under the
+# old Next.js path (`/api/auth/<service>/callback`). We keep that path working so users
+# don't have to re-register redirect URIs with Slack/Google/GitHub. Start endpoints
+# stay at /auth/<service>; only callbacks need aliasing.
+compat_router = APIRouter(prefix="/api/auth", tags=["auth"])
+
 SLACK_SCOPES = "channels:history,channels:read,users:read,reactions:read"
 
 GMAIL_SCOPES = " ".join([
@@ -41,7 +47,7 @@ def slack_oauth_start(api_key: str = Query(...)):
     if not user:
         raise HTTPException(401, "Invalid API key")
 
-    redirect_uri = f"{_backend_url()}/auth/slack/callback"
+    redirect_uri = f"{_backend_url()}/api/auth/slack/callback"
     url = (
         "https://slack.com/oauth/v2/authorize"
         f"?client_id={settings.slack_client_id}"
@@ -53,6 +59,7 @@ def slack_oauth_start(api_key: str = Query(...)):
 
 
 @router.get("/slack/callback")
+@compat_router.get("/slack/callback")
 async def slack_oauth_callback(
     code: str = Query(None),
     state: str = Query(None),
@@ -71,7 +78,7 @@ async def slack_oauth_callback(
             f"{settings.frontend_url}/agents?error=invalid_state"
         )
 
-    redirect_uri = f"{_backend_url()}/auth/slack/callback"
+    redirect_uri = f"{_backend_url()}/api/auth/slack/callback"
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             "https://slack.com/api/oauth.v2.access",
@@ -115,7 +122,7 @@ def gmail_oauth_start(api_key: str = Query(...)):
     if not user:
         raise HTTPException(401, "Invalid API key")
 
-    redirect_uri = f"{_backend_url()}/auth/gmail/callback"
+    redirect_uri = f"{_backend_url()}/api/auth/gmail/callback"
     url = (
         "https://accounts.google.com/o/oauth2/v2/auth"
         f"?client_id={settings.google_client_id}"
@@ -130,6 +137,7 @@ def gmail_oauth_start(api_key: str = Query(...)):
 
 
 @router.get("/gmail/callback")
+@compat_router.get("/gmail/callback")
 async def gmail_oauth_callback(
     code: str = Query(None),
     state: str = Query(None),
@@ -148,7 +156,7 @@ async def gmail_oauth_callback(
             f"{settings.frontend_url}/agents?gmail_error=invalid_state"
         )
 
-    redirect_uri = f"{_backend_url()}/auth/gmail/callback"
+    redirect_uri = f"{_backend_url()}/api/auth/gmail/callback"
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             "https://oauth2.googleapis.com/token",
@@ -193,7 +201,7 @@ def github_oauth_start(api_key: str = Query(...)):
     if not user:
         raise HTTPException(401, "Invalid API key")
 
-    redirect_uri = f"{_backend_url()}/auth/github/callback"
+    redirect_uri = f"{_backend_url()}/api/auth/github/callback"
     url = (
         "https://github.com/login/oauth/authorize"
         f"?client_id={settings.github_client_id}"
@@ -205,6 +213,7 @@ def github_oauth_start(api_key: str = Query(...)):
 
 
 @router.get("/github/callback")
+@compat_router.get("/github/callback")
 async def github_oauth_callback(
     code: str = Query(None),
     state: str = Query(None),
@@ -223,7 +232,7 @@ async def github_oauth_callback(
             f"{settings.frontend_url}/agents?github_error=invalid_state"
         )
 
-    redirect_uri = f"{_backend_url()}/auth/github/callback"
+    redirect_uri = f"{_backend_url()}/api/auth/github/callback"
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             "https://github.com/login/oauth/access_token",

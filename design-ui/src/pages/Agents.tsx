@@ -62,51 +62,16 @@ function buildContext(tab: Tab, slack: SlackMessage[], gmail: Email[], github: G
   return github.map(i => `[${i.type}] ${i.repo}: ${i.title} — ${i.reason} (${i.time})`).join('\n')
 }
 
-// ── Token storage helpers ───────────────────
-// The OAuth callback on the Next.js (ngrok) origin can't set cookies reachable from
-// localhost:5173, so it ships tokens back to us in the URL hash. We stash them in
-// localStorage and send them as Authorization headers on subsequent API calls.
-const LS_KEYS = {
-  slackAccess: 'oauth.slack.access',
-  gmailAccess: 'oauth.gmail.access',
-  gmailRefresh: 'oauth.gmail.refresh',
-  githubAccess: 'oauth.github.access',
-} as const
-
-function readToken(key: string): string | null {
-  try { return localStorage.getItem(key) } catch { return null }
-}
-
-function writeToken(key: string, value: string | null) {
-  try {
-    if (value) localStorage.setItem(key, value)
-    else localStorage.removeItem(key)
-  } catch { /* ignore */ }
-}
-
-function authHeaders(token: string | null, extra?: Record<string, string>): HeadersInit {
-  const h: Record<string, string> = { ...(extra || {}) }
-  if (token) h['Authorization'] = `Bearer ${token}`
-  return h
-}
-
 // ── Component ───────────────────────────────
 export default function Agents() {
   const [tab, setTab]     = useState<Tab>('slack')
   const [clock, setClock] = useState('')
 
-<<<<<<< Updated upstream
   // Connection states
-=======
-  const [slackData,  setSlackData]  = useState<SlackMessage[]>(MOCK_SLACK)
-  const [gmailData,  setGmailData]  = useState<Email[]>(MOCK_GMAIL)
-  const [githubData, setGithubData] = useState<GithubItem[]>(MOCK_GITHUB)
->>>>>>> Stashed changes
   const [slackConn,  setSlackConn]  = useState(false)
   const [gmailConn,  setGmailConn]  = useState(false)
   const [githubConn, setGithubConn] = useState(false)
 
-<<<<<<< Updated upstream
   // Data states
   const [slackData,  setSlackData]  = useState<SlackMessage[]>(MOCK_SLACK)
   const [gmailData,  setGmailData]  = useState<Email[]>(MOCK_GMAIL)
@@ -114,8 +79,6 @@ export default function Agents() {
   const [feedLoading, setFeedLoading] = useState(true)
 
   // Chat states
-=======
->>>>>>> Stashed changes
   const [messages,  setMessages]  = useState<ChatMsg[]>([])
   const [input,     setInput]     = useState('')
   const [streaming, setStreaming] = useState(false)
@@ -130,7 +93,6 @@ export default function Agents() {
     return () => clearInterval(iv)
   }, [])
 
-<<<<<<< Updated upstream
   // Fetch live feeds on mount
   useEffect(() => {
     if (!isLoggedIn()) {
@@ -163,83 +125,6 @@ export default function Agents() {
       fetchGithubActivity().then(d => { if (d.connected) { setGithubConn(true); setGithubData(d.items) } })
     }
     if (p.toString()) window.history.replaceState({}, '', '/agents')
-=======
-  // Capture tokens from the OAuth callback's URL hash and stash them in localStorage.
-  // Do this before the fetch effects below so the fetches can see the new tokens.
-  useEffect(() => {
-    if (typeof window === 'undefined' || !window.location.hash) return
-    const params = new URLSearchParams(window.location.hash.replace(/^#/, ''))
-    let captured = false
-    const sa = params.get('slack_access');  if (sa) { writeToken(LS_KEYS.slackAccess, sa); captured = true }
-    const ga = params.get('gmail_access');  if (ga) { writeToken(LS_KEYS.gmailAccess, ga); captured = true }
-    const gr = params.get('gmail_refresh'); if (gr) { writeToken(LS_KEYS.gmailRefresh, gr); captured = true }
-    const ha = params.get('github_access'); if (ha) { writeToken(LS_KEYS.githubAccess, ha); captured = true }
-    if (captured) {
-      // Clear the hash from the URL so the tokens aren't visible / re-applied on reload.
-      history.replaceState(null, '', window.location.pathname + window.location.search)
-    }
-  }, [])
-
-  // Fetch real data from each provider when we have a token.
-  useEffect(() => {
-    const slackTok = readToken(LS_KEYS.slackAccess)
-    if (slackTok) {
-      fetch('/api/slack/messages', { headers: authHeaders(slackTok) })
-        .then(r => r.json())
-        .then(d => {
-          if (d.connected && Array.isArray(d.messages) && d.messages.length) {
-            setSlackConn(true)
-            // Normalize the Next.js shape to our SlackMessage interface.
-            setSlackData(d.messages.map((m: { id: string; user: string; text: string; channel: string; time: string }) => ({
-              id: m.id,
-              user: m.user,
-              text: m.text,
-              channel: (m.channel || '').replace(/^#/, ''),
-              time: m.time,
-              priority: 'medium',
-              read: false,
-            })))
-          } else if (d.connected === false) {
-            // Token rejected — drop it so we fall back to mock cleanly next time.
-            writeToken(LS_KEYS.slackAccess, null)
-          }
-        })
-        .catch(() => { /* ignore — leave mock data */ })
-    }
-
-    const gmailTok = readToken(LS_KEYS.gmailAccess)
-    const gmailRefresh = readToken(LS_KEYS.gmailRefresh)
-    if (gmailTok || gmailRefresh) {
-      const headers = authHeaders(gmailTok, gmailRefresh ? { 'X-Gmail-Refresh-Token': gmailRefresh } : undefined)
-      fetch('/api/gmail/messages', { headers })
-        .then(r => r.json())
-        .then(d => {
-          if (d.connected && Array.isArray(d.emails) && d.emails.length) {
-            setGmailConn(true)
-            setGmailData(d.emails)
-          } else if (d.connected === false) {
-            writeToken(LS_KEYS.gmailAccess, null)
-            writeToken(LS_KEYS.gmailRefresh, null)
-          }
-        })
-        .catch(() => { /* ignore */ })
-    }
-
-    const githubTok = readToken(LS_KEYS.githubAccess)
-    if (githubTok) {
-      fetch('/api/github/activity', { headers: authHeaders(githubTok) })
-        .then(r => r.json())
-        .then(d => {
-          if (d.connected && Array.isArray(d.items) && d.items.length) {
-            setGithubConn(true)
-            setGithubData(d.items)
-          } else if (d.connected === false) {
-            writeToken(LS_KEYS.githubAccess, null)
-          }
-        })
-        .catch(() => { /* ignore */ })
-    }
->>>>>>> Stashed changes
   }, [])
 
   // reset chat on tab switch
@@ -248,15 +133,11 @@ export default function Agents() {
   // scroll to bottom
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
-<<<<<<< Updated upstream
   const connected = tab === 'slack' ? slackConn : tab === 'gmail' ? gmailConn : githubConn
-  const feedData = tab === 'slack' ? slackData : tab === 'gmail' ? gmailData : githubData
-  const unreadCount = (items: typeof feedData) => items.filter(i => 'read' in i ? !i.read : (i as GithubItem).unread).length
+  const unreadCount = (items: SlackMessage[] | Email[] | GithubItem[]) =>
+    items.filter(i => 'read' in i ? !i.read : (i as GithubItem).unread).length
 
   const connectHref = oauthUrl(tab)
-=======
-  const tabConnected = tab === 'slack' ? slackConn : tab === 'gmail' ? gmailConn : githubConn
->>>>>>> Stashed changes
 
   const getContext = useCallback(
     () => buildContext(tab, slackData, gmailData, githubData),
@@ -349,11 +230,7 @@ export default function Agents() {
         >
           {TABS.map(t => {
             const data = t.id === 'slack' ? slackData : t.id === 'gmail' ? gmailData : githubData
-<<<<<<< Updated upstream
             const n = unreadCount(data)
-=======
-            const n = data.filter(i => 'read' in i ? !i.read : (i as GithubItem).unread).length
->>>>>>> Stashed changes
             const active = tab === t.id
             return (
               <button
@@ -401,7 +278,6 @@ export default function Agents() {
                 <span className="font-display" style={{ fontSize: 12, color: 'var(--accent)', letterSpacing: '0.12em' }}>
                   {tab.toUpperCase()} FEED
                 </span>
-<<<<<<< Updated upstream
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <div style={{ width: 6, height: 6, borderRadius: '50%', background: connected ? 'var(--accent)' : 'var(--status-idle)', animation: connected ? 'pulse-status 1.5s ease-in-out infinite' : 'none' }} />
@@ -414,28 +290,11 @@ export default function Agents() {
                       href={connectHref}
                       className="font-display"
                       style={{ fontSize: 10, color: 'var(--accent)', letterSpacing: '0.1em', padding: '4px 12px', border: '1px solid var(--accent)', borderRadius: 'var(--radius-sm)', transition: 'background 150ms' }}
-=======
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <div style={{
-                    width: 6, height: 6, borderRadius: '50%',
-                    background: tabConnected ? 'var(--success, #00DD77)' : 'var(--status-idle)',
-                    boxShadow: tabConnected ? '0 0 6px var(--success, #00DD77)' : 'none',
-                  }} />
-                  <span className="font-system" style={{ fontSize: 10, color: tabConnected ? 'var(--success, #00DD77)' : '#555', letterSpacing: '0.1em' }}>
-                    {tabConnected ? 'LIVE' : 'DEMO'}
-                  </span>
-                  {!tabConnected && (
-                    <a
-                      href={`http://localhost:3000/api/auth/${tab === 'github' ? 'github' : tab}?next=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href.split('#')[0] : '')}`}
-                      className="font-display"
-                      style={{ marginLeft: 8, fontSize: 10, color: 'var(--accent)', letterSpacing: '0.1em', padding: '4px 12px', border: '1px solid var(--accent)', borderRadius: 'var(--radius-sm)', transition: 'background 150ms' }}
->>>>>>> Stashed changes
                       onMouseEnter={e => (e.currentTarget.style.background = 'var(--accent-dim)')}
                       onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                     >
                       CONNECT
                     </a>
-<<<<<<< Updated upstream
                   ) : (
                     <button
                       onClick={handleDisconnect}
@@ -444,14 +303,11 @@ export default function Agents() {
                     >
                       DISCONNECT
                     </button>
-=======
->>>>>>> Stashed changes
                   )}
                 </div>
               </div>
 
               {/* items */}
-<<<<<<< Updated upstream
               {feedLoading ? (
                 <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <div style={{ display: 'flex', gap: 6 }}>
@@ -479,30 +335,11 @@ export default function Agents() {
                           {msg.priority === 'high' && <span className="font-system" style={{ fontSize: 9, color: 'var(--status-error)', letterSpacing: '0.1em' }}>URGENT</span>}
                         </div>
                         <span className="font-system" style={{ fontSize: 10, color: '#666' }}>{msg.time}</span>
-=======
-              <div style={{ overflowY: 'auto', flex: 1 }}>
-                {tab === 'slack' && slackData.map((msg, i) => (
-                  <motion.div
-                    key={msg.id}
-                    initial={{ opacity: 0, x: -8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.05, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-                    style={{ padding: '18px 28px', borderBottom: '1px solid var(--surface-raised)', borderLeft: !msg.read ? '2px solid var(--accent)' : '2px solid transparent', transition: 'background 120ms' }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-raised)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span className="font-display" style={{ fontSize: 13, color: !msg.read ? 'var(--text-primary)' : '#AAAAAA' }}>{msg.user}</span>
-                        <span className="font-system" style={{ fontSize: 9, color: 'var(--accent)', background: 'var(--accent-dim)', borderRadius: 4, padding: '2px 7px', letterSpacing: '0.06em' }}>#{msg.channel}</span>
-                        {msg.priority === 'high' && <span className="font-system" style={{ fontSize: 9, color: 'var(--status-error)', letterSpacing: '0.1em' }}>URGENT</span>}
->>>>>>> Stashed changes
                       </div>
                       <p className="font-narrative" style={{ margin: 0, fontSize: 14, color: '#AAAAAA', lineHeight: 1.65 }}>{msg.text}</p>
                     </motion.div>
                   ))}
 
-<<<<<<< Updated upstream
                   {tab === 'gmail' && gmailData.map((email, i) => (
                     <motion.div
                       key={email.id}
@@ -519,22 +356,6 @@ export default function Agents() {
                           {email.priority === 'high' && <span className="font-system" style={{ fontSize: 9, color: 'var(--status-error)', letterSpacing: '0.1em' }}>URGENT</span>}
                         </div>
                         <span className="font-system" style={{ fontSize: 10, color: '#666' }}>{email.time}</span>
-=======
-                {tab === 'gmail' && gmailData.map((email, i) => (
-                  <motion.div
-                    key={email.id}
-                    initial={{ opacity: 0, x: -8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.05, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-                    style={{ padding: '16px 24px', borderBottom: '1px solid var(--surface-raised)', borderLeft: !email.read ? '2px solid var(--accent)' : '2px solid transparent', transition: 'background 120ms' }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-raised)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span className="font-display" style={{ fontSize: 13, color: !email.read ? 'var(--text-primary)' : '#AAAAAA' }}>{email.from}</span>
-                        {email.priority === 'high' && <span className="font-system" style={{ fontSize: 9, color: 'var(--status-error)', letterSpacing: '0.1em' }}>URGENT</span>}
->>>>>>> Stashed changes
                       </div>
                       <p className="font-display" style={{ margin: '0 0 5px', fontSize: 12, color: !email.read ? 'var(--text-primary)' : '#AAAAAA', letterSpacing: '0.03em' }}>{email.subject}</p>
                       <p className="font-narrative" style={{ margin: '0 0 10px', fontSize: 13, color: '#777', lineHeight: 1.6 }}>{email.body}</p>
@@ -548,7 +369,6 @@ export default function Agents() {
                     </motion.div>
                   ))}
 
-<<<<<<< Updated upstream
                   {tab === 'github' && githubData.map((item, i) => (
                     <motion.div
                       key={item.id}
@@ -566,23 +386,6 @@ export default function Agents() {
                           {item.state === 'draft' && <span className="font-system" style={{ fontSize: 9, color: '#555', letterSpacing: '0.08em' }}>DRAFT</span>}
                         </div>
                         <span className="font-system" style={{ fontSize: 10, color: '#666' }}>{item.time}</span>
-=======
-                {tab === 'github' && githubData.map((item, i) => (
-                  <motion.div
-                    key={item.id}
-                    initial={{ opacity: 0, x: -8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.05, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-                    style={{ padding: '16px 24px', borderBottom: '1px solid var(--surface-raised)', borderLeft: item.unread ? '2px solid var(--accent)' : '2px solid transparent', transition: 'background 120ms' }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-raised)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span className="font-system" style={{ fontSize: 9, color: item.type === 'PR' ? '#00DD77' : '#AAAAAA', border: `1px solid ${item.type === 'PR' ? '#00DD77' : 'var(--border-default)'}`, borderRadius: 4, padding: '2px 6px', letterSpacing: '0.06em' }}>{item.type}</span>
-                        <span className="font-system" style={{ fontSize: 10, color: 'var(--accent)' }}>{item.repo}</span>
-                        {item.state === 'draft' && <span className="font-system" style={{ fontSize: 9, color: '#555', letterSpacing: '0.08em' }}>DRAFT</span>}
->>>>>>> Stashed changes
                       </div>
                       <p className="font-narrative" style={{ margin: '0 0 7px', fontSize: 14, color: item.unread ? 'var(--text-primary)' : '#AAAAAA', lineHeight: 1.55 }}>{item.title}</p>
                       <div style={{ display: 'flex', gap: 14 }}>
