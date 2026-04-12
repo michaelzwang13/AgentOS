@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "git fetch --quiet --all 2>/dev/null; new=$(git log HEAD..@{u} --oneline --no-merges 2>/dev/null | head -30); if [ -n \"$new\" ]; then jq -nc --arg ctx \"New commits on $(git rev-parse --abbrev-ref @{u} 2>/dev/null) since HEAD:\"$'\\n'\"$new\" '{hookSpecificOutput: {hookEventName: \"SessionStart\", additionalContext: $ctx}}'; fi",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}
