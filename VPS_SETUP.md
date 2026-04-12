@@ -58,7 +58,7 @@ The `PLATFORM_GATEWAY_URL` uses `platform` (the Docker Compose service name) so 
 docker build -t openclaw/agent:latest backend/agent-runtime/
 ```
 
-This is the image the platform spins up for each hired agent.
+This is the image the platform spins up for each hired agent. **Do not skip this step** — if this image is missing, `docker compose up` still starts the platform, but the first `POST /agents` fails at runtime with `No such image: openclaw/agent:latest`.
 
 ## 6. Start the platform
 
@@ -71,12 +71,13 @@ This starts the platform on port 8000 and creates the `openclaw-agents` bridge n
 
 ## 7. Set up Supabase tables
 
-Run the migration against your Supabase project:
+Run the migration against your Supabase project. Easiest path:
 
-```bash
-# Either via Supabase dashboard SQL editor, or:
-psql $DATABASE_URL -f migrations/001_initial_schema.sql
-```
+1. Open your Supabase project → **SQL Editor** → **New query**
+2. Paste the contents of `backend/migrations/001_initial_schema.sql`
+3. Click **Run**
+
+This creates the `users`, `agents`, and `credentials` tables with the RLS policies the platform expects. If you skip this, `POST /users` will fail on first call with a "relation does not exist" error.
 
 ## 8. Verify it's working
 
@@ -91,18 +92,21 @@ curl -X POST http://localhost:8000/users \
   -d '{"email":"you@example.com","name":"Admin"}'
 # -> returns user with api_key
 
+# List available roles (should include code-review-engineer and customer-support)
+curl http://localhost:8000/roles
+
 # Hire an agent (use the api_key from above)
 curl -X POST http://localhost:8000/agents \
   -H "Content-Type: application/json" \
   -H "X-Api-Key: oc_your-api-key" \
-  -d '{"role":"secretary"}'
+  -d '{"role":"code-review-engineer"}'
 # -> returns agent with id
 
 # Assign a task
 curl -X POST http://localhost:8000/agents/AGENT_ID/tasks \
   -H "Content-Type: application/json" \
   -H "X-Api-Key: oc_your-api-key" \
-  -d '{"instruction":"Draft an email to the team about the Q2 roadmap"}'
+  -d '{"instruction":"Review the latest PR for correctness and readability"}'
 
 # Check task status
 curl http://localhost:8000/agents/AGENT_ID/tasks/status \
