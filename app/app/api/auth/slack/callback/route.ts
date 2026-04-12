@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
 
   if (error || !code) {
     return NextResponse.redirect(
-      `${BASE_URL}/agent/slack?error=${error || "missing_code"}`
+      `${BASE_URL}/test?error=${error || "missing_code"}`
     );
   }
 
@@ -34,14 +34,14 @@ export async function GET(req: NextRequest) {
 
   if (!data.ok) {
     return NextResponse.redirect(
-      `${BASE_URL}/agent/slack?error=${data.error}`
+      `${BASE_URL}/test?error=${data.error}`
     );
   }
 
   const userToken = data.authed_user?.access_token;
   if (!userToken) {
     return NextResponse.redirect(
-      `${BASE_URL}/agent/slack?error=no_user_token`
+      `${BASE_URL}/test?error=no_user_token`
     );
   }
 
@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
     console.error("Could not reach backend, falling back to cookie:", err);
     // Fallback: store in cookie so the app still works without the backend
     const fallback = NextResponse.redirect(
-      `${BASE_URL}/agent/slack?connected=true&mode=local`
+      `${BASE_URL}/test?connected=true&mode=local`
     );
     fallback.cookies.set("slack_token", userToken, {
       httpOnly: true,
@@ -69,5 +69,5 @@ export async function GET(req: NextRequest) {
     return fallback;
   }
 
-  return NextResponse.redirect(`${BASE_URL}/agent/slack?connected=true`);
+  return NextResponse.redirect(`${BASE_URL}/test?connected=true`);
 }

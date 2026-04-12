@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ChatPanel } from "./chat-panel";
+import { Card } from "@/components/ui/card";
+import { ChatPanel } from "@/components/test/chat-panel";
 import { cn } from "@/lib/utils";
 
 export function GlobalChat() {
@@ -27,10 +27,7 @@ export function GlobalChat() {
 
       <Card className={cn("transition-all overflow-hidden", expanded ? "h-[500px]" : "h-[320px]")}>
         <div className="h-full flex flex-col">
-          <ChatPanel
-            agentId="global"
-            placeholder="Ask across Gmail, Slack, and GitHub..."
-          />
+          <ChatPanel agentId="global" />
         </div>
       </Card>
     </div>
