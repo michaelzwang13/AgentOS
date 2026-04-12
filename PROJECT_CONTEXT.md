@@ -49,9 +49,24 @@ POST /agents/{id}/tasks/cancel → POST :8080/cancel    (cancel work)
 ```
 
 Key components:
-- `backend/agent-runtime/server.py` — FastAPI app inside each container (receives tasks, reports status)
+- `backend/agent-runtime/server.py` — Task server sidecar (receives tasks, forwards to OpenClaw)
+- `backend/agent-runtime/entrypoint.sh` — Bootstraps OpenClaw config and starts both services
 - `backend/app/services/dispatcher.py` — Platform-side HTTP client that sends tasks to containers
 - `backend/app/services/orchestrator.py` — Manages container lifecycle, resolves container IPs via Docker SDK
+
+### OpenClaw + Kimi Integration (Implemented)
+Each agent container is built on top of the official OpenClaw Docker image (`ghcr.io/openclaw/openclaw:latest`). The entrypoint script bootstraps OpenClaw with:
+- `openclaw.json` — configures Kimi K2.5 (Moonshot AI) as the LLM provider
+- `SOUL.md` — agent persona and role boundaries, generated from env vars
+- `AGENTS.md` — operating instructions for task handling
+
+```
+Agent Container
+├── OpenClaw Gateway (port 18789) ← runs Kimi K2.5 via Moonshot API
+└── Task Server (port 8080) ← receives tasks from platform, forwards to OpenClaw
+```
+
+When a task arrives, the task server sends the instruction to OpenClaw's local `/api/v1/chat` endpoint. OpenClaw processes it using Kimi K2.5 and returns the result.
 
 ### Auth Model (OAuth Gateway Pattern)
 - Platform registers as OAuth App with each provider (GitHub, Slack, Linear, etc.)

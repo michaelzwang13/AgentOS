@@ -197,7 +197,7 @@ Optimized for non-technical buyers and visible day-one impact. The hackathon sta
 | Hiring UX frontend | Next.js + Tailwind + shadcn/ui | Fast, batteries-included, good defaults |
 | Durable workflows | Temporal or Inngest (only when needed) | Don't add until multi-step action durability is actually required |
 | Observability | Sentry + PostHog + Axiom | Errors, product analytics, action logs |
-| LLM | Claude (claude-opus-4-6 for quality, claude-sonnet-4-6 for cost) | Best-in-class, matches the autonomous employee thesis |
+| LLM | Kimi K2.5 (Moonshot AI) via OpenClaw | OpenAI-compatible API, configured as OpenClaw's model provider |
 
 ---
 
@@ -234,8 +234,9 @@ Copied from `CLAUDE.md` — enforce these consistently in product copy, docs, an
 - [x] **Container orchestration.** Docker-based agent containers with per-agent isolation on a shared VPS
 - [x] **Platform → agent task dispatch.** HTTP-based task assignment, status checking, and cancellation between platform and agent containers
 - [x] **Agent runtime.** Lightweight FastAPI server inside each container that receives and executes tasks
-- [x] **Unit test suite.** 59 tests covering all backend modules (routers, services, schemas, agent runtime)
-- [x] **Role definition template.** Secretary agent YAML config with task handling settings
+- [x] **OpenClaw integration.** Agent containers run the official OpenClaw gateway with Kimi (Moonshot AI) as the backend LLM. Tasks are forwarded to OpenClaw's chat API for execution.
+- [x] **Unit test suite.** 68 tests covering all backend modules (routers, services, schemas, agent runtime, OpenClaw integration)
+- [x] **Role definition template.** Secretary agent YAML config with task handling and OpenClaw model settings
 
 ## What Needs Doing Next (Hackathon)
 
@@ -243,7 +244,7 @@ Copied from `CLAUDE.md` — enforce these consistently in product copy, docs, an
 - [ ] **Add `code-review-engineer.yaml` and `customer-support.yaml` role templates.** Mirror `secretary.yaml`'s shape with role-specific `allowed_actions`, `system_prompt`, and `default_config`.
 - [ ] **Add `GET /roles` endpoint.** Lists available templates so the frontend directory can render dynamically instead of duplicating the list.
 - [ ] **Register a real GitHub OAuth App** and wire the redirect/callback in the backend. `POST /credentials` already stores tokens — we need the consent flow in front of it.
-- [ ] **Implement real agent logic.** Replace placeholder task execution in `agent-runtime/server.py` with LLM-powered task handling.
+- [x] ~~**Implement real agent logic.**~~ Done — agent runtime now forwards tasks to the local OpenClaw gateway, which uses Kimi K2.5.
 - [ ] **Deploy to VPS.** Get the platform + agent containers running end-to-end.
 
 **Frontend track (handed off — see `app/HANDOFF.md`):**

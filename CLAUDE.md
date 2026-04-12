@@ -19,6 +19,8 @@ AI Employee Platform — "Fiverr for OpenClaw." Managed platform that packages O
 - Platform → agent communication via HTTP POST to container internal IPs on Docker bridge network
 - Agent runtime runs FastAPI on port 8080 inside each container
 - All containers on a single VPS, communicating over `openclaw-agents` Docker network
+- **OpenClaw is the agent engine** — each container runs the official OpenClaw gateway with our task server as a sidecar
+- **Kimi (Moonshot AI) is the backend LLM** — configured via `openclaw.json` with the `moonshot/kimi-k2.5` model
 
 ## Backend Structure
 ```
@@ -29,9 +31,9 @@ backend/
     models/        — Supabase data access (user, agent, credential)
     schemas/       — Pydantic models (user, agent, credential, task)
     utils/         — Helpers (crypto)
-  agent-runtime/   — FastAPI server that runs inside agent containers
+  agent-runtime/   — OpenClaw + task server sidecar (Dockerfile, entrypoint, server.py)
   agent-config/    — Role templates (secretary.yaml today; code-review-engineer + customer-support needed for hackathon)
-  tests/           — Unit tests (59 tests, all passing)
+  tests/           — Unit tests (68 tests, all passing)
 ```
 
 ## Frontend
