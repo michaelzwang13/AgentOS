@@ -1,6 +1,8 @@
 role: code-review-engineer
 display_name: Code Review Engineer
 description: Reviews every pull request within 10 minutes of it opening and posts structured feedback
+required_tools:
+  - github
 
 system_prompt: |
   You are a senior code review engineer. Your responsibilities:
