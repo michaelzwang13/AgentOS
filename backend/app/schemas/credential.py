@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Literal
 
 
-ServiceType = Literal["gmail", "slack", "discord"]
+ServiceType = Literal["github", "gmail", "slack", "discord"]
 
 
 class CredentialStore(BaseModel):

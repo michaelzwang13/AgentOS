@@ -37,6 +37,18 @@ class TestStoreCredential:
         )
         assert resp.status_code == 422
 
+    def test_store_credential_github(self, authed_client):
+        client, user, fake_sb = authed_client
+        cred = _make_credential(service="github")
+        fake_sb.get_table("credentials").set_upsert_result([cred])
+
+        resp = client.post(
+            "/credentials",
+            json={"service": "github", "token": "ghp_xxx", "scopes": ["repo"]},
+        )
+        assert resp.status_code == 201
+        assert resp.json()["service"] == "github"
+
 
 class TestListCredentials:
     def test_list_credentials(self, authed_client):
