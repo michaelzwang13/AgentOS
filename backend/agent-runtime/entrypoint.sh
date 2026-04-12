@@ -3,15 +3,28 @@ set -e
 
 # ── Bootstrap OpenClaw config ──────────────────────────────────────────────
 
-OPENCLAW_HOME="${OPENCLAW_CONFIG_DIR:-/home/node/.openclaw}"
+OPENCLAW_HOME="${OPENCLAW_CONFIG_DIR:-/root/.openclaw}"
 WORKSPACE="$OPENCLAW_HOME/workspace"
 mkdir -p "$WORKSPACE"
 
 # Write openclaw.json with Kimi/Moonshot as the LLM provider
+# Enable the OpenAI-compatible chat completions HTTP endpoint
+# and set auth to none (internal container traffic only)
 cat > "$OPENCLAW_HOME/openclaw.json" <<JSONEOF
 {
   "env": {
     "MOONSHOT_API_KEY": "${LLM_API_KEY}"
+  },
+  "gateway": {
+    "auth": {
+      "mode": "token",
+      "token": "${OPENCLAW_GATEWAY_TOKEN:-openclaw-internal}"
+    },
+    "http": {
+      "endpoints": {
+        "chatCompletions": { "enabled": true }
+      }
+    }
   },
   "agents": {
     "defaults": {
@@ -86,9 +99,9 @@ echo "[entrypoint] OpenClaw config written to $OPENCLAW_HOME"
 echo "[entrypoint] Role: ${AGENT_ROLE:-generic}"
 echo "[entrypoint] Starting OpenClaw gateway in background..."
 
-# Start OpenClaw gateway in background
+# Start OpenClaw gateway in background (official entrypoint)
 cd /app
-node build/src/index.js &
+node openclaw.mjs gateway --allow-unconfigured &
 OPENCLAW_PID=$!
 
 # Wait for OpenClaw gateway to be ready

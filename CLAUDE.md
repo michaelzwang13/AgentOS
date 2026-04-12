@@ -14,14 +14,16 @@ AI Employee Platform — "Fiverr for OpenClaw." Managed platform that packages O
 - **Hackathon OAuth fidelity:** real OAuth for GitHub only; Slack and Gmail use a simulated consent screen that writes a placeholder token via `POST /credentials`.
 - **Hackathon billing:** out of scope. No Stripe, no payment gate, no trial logic. Phase 6 is post-hackathon work.
 - **Frontend scope:** hire flow end-to-end (landing → talent directory → employee profile → 4-step hire wizard → confirm). Post-hire surfaces (work log, team page, performance review) are post-hackathon.
-- **Hackathon demo bar:** "hired and running is enough." Demo ends at the confirmation screen; real LLM task execution is post-hackathon.
-- **Hackathon deploy target:** local Docker Desktop on the demo laptop. **No VPS for the MVP** — VPS deployment is post-hackathon work. See `LOCAL_SETUP.md` for the setup guide; `VPS_SETUP.md` was retired on 2026-04-12.
+- **Hackathon demo bar:** "hired and running is enough." LLM task execution is now live — Kimi K2.5 responds to tasks via OpenClaw gateway.
+- **Hackathon deploy target:** local Docker Desktop on the demo laptop. **No VPS for the MVP** — VPS deployment is post-hackathon work. See `LOCAL_SETUP.md` for the setup guide.
 - Target: 20-80 person teams (Series A-C)
 - Platform → agent communication via HTTP POST to container internal IPs on Docker bridge network
 - Agent runtime runs FastAPI on port 8080 inside each container
 - All containers run on Docker Desktop locally, communicating over the `openclaw-agents` Docker bridge network
 - **OpenClaw is the agent engine** — each container runs the official OpenClaw gateway with our task server as a sidecar
 - **Kimi (Moonshot AI) is the backend LLM** — configured via `openclaw.json` with the `moonshot/kimi-k2.5` model
+- **OpenClaw chat completions API** — gateway exposes OpenAI-compatible `/v1/chat/completions` endpoint (must be explicitly enabled in config); task server uses token auth (`openclaw-internal` default)
+- **LLM calls verified end-to-end** — container builds, OpenClaw gateway starts, Kimi responds to tasks
 
 ## Backend Structure
 ```
@@ -34,7 +36,7 @@ backend/
     utils/         — Helpers (crypto)
   agent-runtime/   — OpenClaw + task server sidecar (Dockerfile, entrypoint, server.py)
   agent-config/    — Role templates (secretary.yaml, code-review-engineer.yaml, customer-support.yaml)
-  tests/           — Unit tests (68 tests, all passing)
+  tests/           — Unit tests (78 tests, all passing)
 ```
 
 ## Frontend

@@ -22,7 +22,7 @@ LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 
 # OpenClaw gateway runs locally in the same container
 OPENCLAW_GATEWAY_URL = os.getenv("OPENCLAW_GATEWAY_URL", "http://127.0.0.1:18789")
-OPENCLAW_GATEWAY_TOKEN = os.getenv("OPENCLAW_GATEWAY_TOKEN", "")
+OPENCLAW_GATEWAY_TOKEN = os.getenv("OPENCLAW_GATEWAY_TOKEN", "openclaw-internal")
 
 # ── Schemas ─────────────────────────────────────────────────────────────────
 
@@ -63,19 +63,27 @@ _state: dict = {
 
 
 async def _send_to_openclaw(instruction: str, cancel_event: asyncio.Event) -> str:
-    """Send a message to the local OpenClaw gateway and get a response."""
+    """Send a message to the local OpenClaw gateway via OpenAI-compatible API."""
+    headers = {"Content-Type": "application/json"}
+    if OPENCLAW_GATEWAY_TOKEN:
+        headers["Authorization"] = f"Bearer {OPENCLAW_GATEWAY_TOKEN}"
+
     async with httpx.AsyncClient(timeout=300) as client:
-        # Send the task instruction to OpenClaw's chat API
         resp = await client.post(
-            f"{OPENCLAW_GATEWAY_URL}/api/v1/chat",
-            json={"message": instruction},
-            headers={"Authorization": f"Bearer {OPENCLAW_GATEWAY_TOKEN}"}
-            if OPENCLAW_GATEWAY_TOKEN
-            else {},
+            f"{OPENCLAW_GATEWAY_URL}/v1/chat/completions",
+            json={
+                "model": "openclaw/default",
+                "messages": [{"role": "user", "content": instruction}],
+            },
+            headers=headers,
         )
         resp.raise_for_status()
         data = resp.json()
-        return data.get("response", data.get("message", str(data)))
+        # OpenAI-compatible response format
+        choices = data.get("choices", [])
+        if choices:
+            return choices[0].get("message", {}).get("content", str(data))
+        return data.get("response", str(data))
 
 
 async def _execute_task(task: TaskAssign, cancel_event: asyncio.Event) -> TaskResult:
@@ -182,6 +190,15 @@ async def cancel_task():
     if _state.get("worker"):
         _state["worker"].cancel()
     return {"cancelled": True, "task_id": _state["current_task"].task_id}
+
+
+@app.get("/result")
+async def last_result():
+    """Return the result of the last completed task."""
+    result = _state.get("last_result")
+    if result is None:
+        raise HTTPException(404, "No task result available")
+    return result
 
 
 @app.get("/health")

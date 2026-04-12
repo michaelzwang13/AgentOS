@@ -143,7 +143,9 @@ class TestOpenClawIntegration:
         """_send_to_openclaw sends instruction to local OpenClaw gateway."""
         with patch("server.httpx.AsyncClient") as mock_httpx:
             mock_resp = MagicMock(status_code=200)
-            mock_resp.json.return_value = {"response": "Email drafted for Bob"}
+            mock_resp.json.return_value = {
+                "choices": [{"message": {"content": "Email drafted for Bob"}}]
+            }
             mock_resp.raise_for_status = MagicMock()
             mock_client = AsyncMock()
             mock_client.post = AsyncMock(return_value=mock_resp)
@@ -156,7 +158,7 @@ class TestOpenClawIntegration:
             assert result == "Email drafted for Bob"
             mock_client.post.assert_called_once()
             call_url = mock_client.post.call_args[0][0]
-            assert "/api/v1/chat" in call_url
+            assert "/v1/chat/completions" in call_url
 
     @pytest.mark.asyncio
     async def test_execute_task_success(self):

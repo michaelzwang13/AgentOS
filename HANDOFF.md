@@ -37,12 +37,14 @@ Each agent container runs:
 2. **Task server** (port 8080) — our FastAPI sidecar that receives tasks from the platform and forwards them to OpenClaw
 
 The `entrypoint.sh` bootstraps everything:
-- Writes `openclaw.json` with Moonshot/Kimi provider config
+- Writes `openclaw.json` with Moonshot/Kimi provider config (enables `/v1/chat/completions` endpoint, token auth)
 - Generates `SOUL.md` (agent persona) and `AGENTS.md` (operating instructions) from the role env vars
-- Starts OpenClaw in the background, waits for it, then starts the task server
+- Starts OpenClaw via `node openclaw.mjs gateway --allow-unconfigured` in background, waits for health check, then starts the task server
+
+**LLM calls are verified end-to-end.** Container builds, gateway starts with `moonshot/kimi-k2.5`, and tasks produce real Kimi responses via the OpenAI-compatible chat completions API.
 
 ### Test Suite
-68 tests, all passing. Run with:
+78 tests, all passing. Run with:
 ```bash
 cd backend
 pip install -e ".[dev]"

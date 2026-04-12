@@ -237,11 +237,13 @@ Copied from `CLAUDE.md` — enforce these consistently in product copy, docs, an
 - [x] **Container orchestration.** Docker-based agent containers with per-agent isolation, run locally on Docker Desktop for the hackathon
 - [x] **Platform → agent task dispatch.** HTTP-based task assignment, status checking, and cancellation between platform and agent containers
 - [x] **Agent runtime.** Lightweight FastAPI server inside each container that receives and executes tasks
-- [x] **OpenClaw integration.** Agent containers run the official OpenClaw gateway with Kimi (Moonshot AI) as the backend LLM. Tasks are forwarded to OpenClaw's chat API for execution.
+- [x] **OpenClaw integration.** Agent containers run the official OpenClaw gateway with Kimi (Moonshot AI) as the backend LLM. Tasks are forwarded to OpenClaw's OpenAI-compatible `/v1/chat/completions` endpoint.
+- [x] **LLM calls verified end-to-end.** Container builds, OpenClaw gateway starts with Kimi K2.5, tasks produce real LLM responses.
 - [x] **Role definition templates.** Secretary, Code Review Engineer, and Customer Support YAMLs with allowed actions, required tools, system prompts, and OpenClaw model settings.
 - [x] **`GET /roles` endpoint + `template_loader` service** feeding the frontend talent directory.
-- [x] **Unit test suite.** 68 tests covering all backend modules (routers, services, schemas, agent runtime, OpenClaw integration).
+- [x] **Unit test suite.** 78 tests covering all backend modules (routers, services, schemas, agent runtime, OpenClaw integration).
 - [x] **Local deploy guide.** `LOCAL_SETUP.md` covers the full happy-path run on Docker Desktop.
+- [x] **Start script.** `start.sh` launches Docker image build, backend, and frontend in one command.
 
 ## What Needs Doing Next (Hackathon)
 
