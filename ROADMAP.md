@@ -17,7 +17,10 @@ This repo is currently a hackathon project. The 14–19 week phased plan below i
 
 **Demo bar:** "hired and running is enough." The hackathon demo ends when a user clicks Hire, the container spins up, and the confirmation screen says the employee is live. The employee does not need to actually do real work in the demo — placeholder task execution in `agent-runtime/server.py` is fine.
 
+**Deploy target:** local Docker Desktop on the demo laptop. No VPS for the MVP — see `LOCAL_SETUP.md`. VPS deployment is explicitly post-hackathon (decision made 2026-04-12; `VPS_SETUP.md` was retired).
+
 **Out of scope for the hackathon (ship post-hackathon):**
+- **VPS / remote deployment.** Runs entirely on Docker Desktop locally for the demo.
 - Billing, Stripe, payment gate, trial logic (Phase 6).
 - Post-hire surfaces: team page, employee workspace, work log/audit trail, performance review, offboarding UI.
 - OAuth apps beyond GitHub.
@@ -231,21 +234,23 @@ Copied from `CLAUDE.md` — enforce these consistently in product copy, docs, an
 ## What's Been Built
 
 - [x] **Platform backend scaffold.** FastAPI backend with user management, agent lifecycle (hire/fire), credential vault, and auth gateway
-- [x] **Container orchestration.** Docker-based agent containers with per-agent isolation on a shared VPS
+- [x] **Container orchestration.** Docker-based agent containers with per-agent isolation, run locally on Docker Desktop for the hackathon
 - [x] **Platform → agent task dispatch.** HTTP-based task assignment, status checking, and cancellation between platform and agent containers
 - [x] **Agent runtime.** Lightweight FastAPI server inside each container that receives and executes tasks
 - [x] **OpenClaw integration.** Agent containers run the official OpenClaw gateway with Kimi (Moonshot AI) as the backend LLM. Tasks are forwarded to OpenClaw's chat API for execution.
-- [x] **Unit test suite.** 68 tests covering all backend modules (routers, services, schemas, agent runtime, OpenClaw integration)
-- [x] **Role definition template.** Secretary agent YAML config with task handling and OpenClaw model settings
+- [x] **Role definition templates.** Secretary, Code Review Engineer, and Customer Support YAMLs with allowed actions, required tools, system prompts, and OpenClaw model settings.
+- [x] **`GET /roles` endpoint + `template_loader` service** feeding the frontend talent directory.
+- [x] **Unit test suite.** 68 tests covering all backend modules (routers, services, schemas, agent runtime, OpenClaw integration).
+- [x] **Local deploy guide.** `LOCAL_SETUP.md` covers the full happy-path run on Docker Desktop.
 
 ## What Needs Doing Next (Hackathon)
 
-**Backend track (in progress):**
-- [ ] **Add `code-review-engineer.yaml` and `customer-support.yaml` role templates.** Mirror `secretary.yaml`'s shape with role-specific `allowed_actions`, `system_prompt`, and `default_config`.
-- [ ] **Add `GET /roles` endpoint.** Lists available templates so the frontend directory can render dynamically instead of duplicating the list.
-- [ ] **Register a real GitHub OAuth App** and wire the redirect/callback in the backend. `POST /credentials` already stores tokens — we need the consent flow in front of it.
-- [x] ~~**Implement real agent logic.**~~ Done — agent runtime now forwards tasks to the local OpenClaw gateway, which uses Kimi K2.5.
-- [ ] **Deploy to VPS.** Get the platform + agent containers running end-to-end.
+**Backend track:**
+- [x] **Role templates** — `code-review-engineer.yaml` and `customer-support.yaml` live in `backend/agent-config/templates/`.
+- [x] **`GET /roles` endpoint** — lists templates via shared `template_loader` service.
+- [x] **Real agent logic** — agent runtime forwards tasks to the local OpenClaw gateway, which uses Kimi K2.5.
+- [x] **Local deploy path** — `LOCAL_SETUP.md` covers the full happy-path run on Docker Desktop.
+- [ ] **Register a real GitHub OAuth App.** Kevin owns registration; client ID/secret go to the frontend engineer as `GITHUB_OAUTH_CLIENT_ID` / `GITHUB_OAUTH_CLIENT_SECRET` env vars in `app/.env.local`. Backend does NOT own the OAuth dance — see `app/HANDOFF.md` for the split.
 
 **Frontend track (handed off — see `app/HANDOFF.md`):**
 - [ ] Build the hire flow per the HANDOFF brief. Landing → talent directory → employee profile → 4-step hire wizard → confirmation.
