@@ -4,11 +4,11 @@ from functools import lru_cache
 
 class Settings(BaseSettings):
     # Supabase
-    supabase_url: str
-    supabase_key: str
+    supabase_url: str = ""
+    supabase_key: str = ""
 
     # Encryption
-    encryption_key: str
+    encryption_key: str = ""
 
     # Docker
     docker_network: str = "openclaw-agents"
@@ -16,6 +16,7 @@ class Settings(BaseSettings):
 
     # LLM
     llm_api_key: str = ""
+    anthropic_api_key: str = ""
 
     # OAuth — Slack
     slack_client_id: str = ""
