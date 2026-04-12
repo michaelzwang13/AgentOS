@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.routers import users, agents, gateway, credentials, tasks
+from app.routers import users, agents, gateway, credentials, tasks, roles
 
 app = FastAPI(
     title="OpenClaw Platform",
@@ -12,6 +12,7 @@ app.include_router(agents.router)
 app.include_router(credentials.router)
 app.include_router(gateway.router)
 app.include_router(tasks.router)
+app.include_router(roles.router)
 
 
 @app.get("/health")
