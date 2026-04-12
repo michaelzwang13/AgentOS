@@ -115,6 +115,33 @@ export async function disconnectService(service: 'slack' | 'gmail' | 'github') {
   await fetch(url(`/gateway/${service}/disconnect`), { method: 'DELETE', headers: headers() })
 }
 
+// ── Digest ──────────────────────────────────────────────────────────────────
+
+export interface DigestResponse {
+  ok?: boolean
+  channel?: string
+  ts?: string
+  digest?: string
+  detail?: string  // error message when the backend returns 4xx/5xx
+}
+
+/**
+ * Ask the backend to summarize Slack/Gmail/GitHub activity and post the digest to a
+ * Slack channel. Defaults to #agentos.
+ */
+export async function postSlackDigest(channel: string = '#agentos'): Promise<DigestResponse> {
+  const res = await fetch(url('/gateway/digest/slack'), {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ channel }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    return { detail: data.detail || `HTTP ${res.status}` }
+  }
+  return data
+}
+
 // ── OAuth ───────────────────────────────────────────────────────────────────
 
 export function oauthUrl(service: 'slack' | 'gmail' | 'github'): string {

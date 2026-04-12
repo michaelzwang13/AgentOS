@@ -9,6 +9,7 @@ import {
   disconnectService,
   oauthUrl,
   streamChat,
+  postSlackDigest,
 } from '@/lib/api'
 
 /* ═══════════════════════════════════════════
@@ -85,6 +86,10 @@ export default function Agents() {
   const chatEndRef = useRef<HTMLDivElement>(null)
   const inputRef   = useRef<HTMLInputElement>(null)
 
+  // Digest-to-Slack state
+  const [digestBusy, setDigestBusy] = useState(false)
+  const [digestStatus, setDigestStatus] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
+
   // clock
   useEffect(() => {
     const tick = () => setClock(new Date().toLocaleTimeString('en-US', { hour12: false }))
@@ -149,6 +154,26 @@ export default function Agents() {
     if (tab === 'slack')  { setSlackConn(false);  setSlackData(MOCK_SLACK)   }
     if (tab === 'gmail')  { setGmailConn(false);  setGmailData(MOCK_GMAIL)   }
     if (tab === 'github') { setGithubConn(false); setGithubData(MOCK_GITHUB) }
+  }
+
+  async function handlePostDigest() {
+    if (digestBusy) return
+    setDigestBusy(true)
+    setDigestStatus(null)
+    try {
+      const res = await postSlackDigest('#agentos')
+      if (res.ok) {
+        setDigestStatus({ kind: 'ok', text: `Posted to ${res.channel}` })
+      } else {
+        setDigestStatus({ kind: 'err', text: res.detail || 'Failed to post digest' })
+      }
+    } catch (err) {
+      setDigestStatus({ kind: 'err', text: String(err) })
+    } finally {
+      setDigestBusy(false)
+      // auto-dismiss status after 6s
+      setTimeout(() => setDigestStatus(null), 6000)
+    }
   }
 
   async function sendMessage(e: React.FormEvent) {
@@ -218,7 +243,43 @@ export default function Agents() {
               Live streams from your connected tools. Query each agent inline.
             </p>
           </div>
-          <span className="font-display" style={{ fontSize: 32, color: '#555555' }}>{clock}</span>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
+            <span className="font-display" style={{ fontSize: 32, color: '#555555' }}>{clock}</span>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+              <button
+                onClick={handlePostDigest}
+                disabled={digestBusy}
+                className="font-display"
+                style={{
+                  background: digestBusy ? 'var(--surface-raised)' : 'var(--accent)',
+                  border: `1px solid ${digestBusy ? 'var(--border-default)' : 'var(--accent)'}`,
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '8px 16px',
+                  fontSize: 10,
+                  letterSpacing: '0.12em',
+                  color: digestBusy ? 'var(--text-muted)' : '#000',
+                  cursor: digestBusy ? 'default' : 'pointer',
+                  transition: 'all 150ms ease',
+                }}
+              >
+                {digestBusy ? 'POSTING…' : 'POST DIGEST → #AGENTOS'}
+              </button>
+              {digestStatus && (
+                <span
+                  className="font-system"
+                  style={{
+                    fontSize: 10,
+                    letterSpacing: '0.08em',
+                    color: digestStatus.kind === 'ok' ? 'var(--accent)' : 'var(--status-error)',
+                    maxWidth: 260,
+                    textAlign: 'right',
+                  }}
+                >
+                  {digestStatus.text}
+                </span>
+              )}
+            </div>
+          </div>
         </motion.div>
 
         {/* ── Tab strip ── */}

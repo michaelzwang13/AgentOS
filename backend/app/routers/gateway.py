@@ -46,6 +46,10 @@ class GitHubPRCommentRequest(BaseModel):
     line: int
 
 
+class DigestRequest(BaseModel):
+    channel: str = "#agentos"
+
+
 # ── Write endpoints ────────────────────────────────────────────────────────────
 
 @router.post("/email/send")
@@ -137,6 +141,107 @@ async def send_discord_message(
         )
     except ValueError as e:
         raise HTTPException(400, str(e))
+
+
+# ── Digest: fetch all three feeds, summarize via Claude, post to Slack ────────
+
+@router.post("/digest/slack")
+async def post_digest_to_slack(
+    payload: DigestRequest,
+    user: dict = Depends(get_current_user),
+):
+    """Fetch Slack/Gmail/GitHub feeds for the current user, ask Claude for a short
+    digest, then post it to a Slack channel (defaults to #agentos)."""
+    import anthropic
+    from app.config import get_settings
+
+    settings = get_settings()
+    if not settings.anthropic_api_key:
+        raise HTTPException(500, "ANTHROPIC_API_KEY not configured")
+
+    # Pull the three feeds in parallel using the existing route handlers.
+    slack_res, gmail_res, github_res = await asyncio.gather(
+        get_slack_messages(user),
+        get_gmail_messages(user),
+        get_github_activity(user),
+        return_exceptions=True,
+    )
+
+    def _safe(result, key: str) -> list:
+        if isinstance(result, Exception):
+            return []
+        return result.get(key, []) if isinstance(result, dict) else []
+
+    slack_msgs = _safe(slack_res, "messages")
+    emails = _safe(gmail_res, "emails")
+    gh_items = _safe(github_res, "items")
+
+    if not slack_msgs and not emails and not gh_items:
+        raise HTTPException(
+            400,
+            "No data available to summarize. Connect at least one of Slack / Gmail / GitHub first.",
+        )
+
+    # Build a compact context for Claude.
+    lines: list[str] = []
+    if slack_msgs:
+        lines.append("## Slack")
+        for m in slack_msgs[:15]:
+            lines.append(f"- [{m.get('channel','')}] {m.get('user','')}: {m.get('text','')} ({m.get('time','')})")
+    if emails:
+        lines.append("\n## Gmail")
+        for e in emails[:10]:
+            lines.append(f"- From {e.get('from','')} | {e.get('subject','')} — {e.get('body','')[:180]} ({e.get('time','')})")
+    if gh_items:
+        lines.append("\n## GitHub")
+        for g in gh_items[:10]:
+            author = f" @{g['author']}" if g.get("author") else ""
+            lines.append(f"- [{g.get('type','')}] {g.get('repo','')}: {g.get('title','')} — {g.get('reason','')}{author} ({g.get('time','')})")
+    context = "\n".join(lines)
+
+    system = (
+        "You are an AI assistant that produces a short, scannable daily digest "
+        "across Slack, Gmail, and GitHub. Output must be plain text suitable for "
+        "posting directly in a Slack message. Use short sections with bullet "
+        "points. Flag blockers and top priorities. Keep the whole thing under "
+        "1200 characters. Do not use markdown headings (#) — use *bold* Slack "
+        "formatting instead. End with a one-line recommendation."
+    )
+
+    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    response = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=900,
+        system=system,
+        messages=[{
+            "role": "user",
+            "content": f"Here is the current activity across all three tools:\n\n{context}\n\nGenerate the digest now.",
+        }],
+    )
+    digest_text = "".join(
+        block.text for block in response.content if getattr(block, "type", None) == "text"
+    ).strip()
+    if not digest_text:
+        raise HTTPException(502, "Claude returned an empty response")
+
+    # Post to Slack via the user's stored credential.
+    try:
+        slack_result = await GatewayService.send_slack_message(
+            user["id"], payload.channel, digest_text
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+    if not slack_result.get("ok"):
+        err = slack_result.get("error", "slack_post_failed")
+        raise HTTPException(502, f"Slack rejected the message: {err}")
+
+    return {
+        "ok": True,
+        "channel": payload.channel,
+        "ts": slack_result.get("ts"),
+        "digest": digest_text,
+    }
 
 
 # ── Read endpoints ─────────────────────────────────────────────────────────────

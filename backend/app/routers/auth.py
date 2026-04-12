@@ -15,7 +15,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 # stay at /auth/<service>; only callbacks need aliasing.
 compat_router = APIRouter(prefix="/api/auth", tags=["auth"])
 
-SLACK_SCOPES = "channels:history,channels:read,users:read,reactions:read"
+SLACK_SCOPES = "channels:history,channels:read,users:read,reactions:read,chat:write"
 
 GMAIL_SCOPES = " ".join([
     "https://www.googleapis.com/auth/gmail.readonly",
