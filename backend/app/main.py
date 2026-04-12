@@ -20,7 +20,6 @@ app.include_router(users.router)
 app.include_router(agents.router)
 app.include_router(credentials.router)
 app.include_router(gateway.router)
-<<<<<<< HEAD
 app.include_router(tasks.router)
 app.include_router(roles.router)
 app.include_router(auth.router)
