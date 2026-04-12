@@ -1,36 +1,29 @@
-from pathlib import Path
-import yaml
 from fastapi import APIRouter, HTTPException
 
+from app.services.template_loader import (
+    UnknownRoleError,
+    list_templates,
+    load_template,
+)
+
 router = APIRouter(prefix="/roles", tags=["roles"])
-
-TEMPLATES_DIR = Path(__file__).resolve().parent.parent.parent / "agent-config" / "templates"
-
-
-def _load_template(path: Path) -> dict:
-    with path.open() as f:
-        data = yaml.safe_load(f) or {}
-    return {
-        "role": data.get("role", path.stem),
-        "display_name": data.get("display_name", path.stem),
-        "description": data.get("description", ""),
-        "allowed_actions": data.get("allowed_actions", []),
-    }
 
 
 @router.get("", response_model=list[dict])
 def list_roles():
-    if not TEMPLATES_DIR.exists():
-        return []
-    return sorted(
-        (_load_template(p) for p in TEMPLATES_DIR.glob("*.yaml")),
-        key=lambda r: r["role"],
-    )
+    return list_templates()
 
 
-@router.get("/{role}", response_model=dict)
-def get_role(role: str):
-    path = TEMPLATES_DIR / f"{role}.yaml"
-    if not path.exists():
-        raise HTTPException(404, f"Role '{role}' not found")
-    return _load_template(path)
+@router.get("/{role_id}", response_model=dict)
+def get_role(role_id: str):
+    try:
+        template = load_template(role_id)
+    except UnknownRoleError as e:
+        raise HTTPException(404, str(e))
+    return {
+        "id": template.get("role", role_id),
+        "display_name": template.get("display_name", role_id),
+        "description": template.get("description", ""),
+        "required_tools": template.get("required_tools", []),
+        "allowed_actions": template.get("allowed_actions", []),
+    }
