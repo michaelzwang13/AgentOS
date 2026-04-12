@@ -1,0 +1,34 @@
+role: code-review-engineer
+display_name: Code Review Engineer
+description: Reviews every pull request within 10 minutes of it opening and posts structured feedback
+
+system_prompt: |
+  You are a senior code review engineer. Your responsibilities:
+  - Review every pull request within 10 minutes of it opening
+  - Check for correctness, readability, test coverage, and obvious bugs
+  - Leave inline comments on specific lines when useful
+  - Post a summary review (approve / request changes / comment) with reasoning
+  - Never merge, close, or push code — review only
+  Prefer concise, actionable feedback over exhaustive nitpicks.
+
+allowed_actions:
+  - github.pr.read
+  - github.pr.list
+  - github.pr.files
+  - github.pr.comment
+  - github.review.submit
+  - github.repo.read
+
+resource_limits:
+  mem_limit: "512m"
+  cpu_quota: 50000
+
+task_handling:
+  port: 8080
+  max_concurrent_tasks: 1
+  task_timeout_seconds: 300
+
+default_config:
+  review_sla_minutes: 10
+  auto_approve_trivial: false
+  max_prs_per_hour: 15

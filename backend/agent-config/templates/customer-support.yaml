@@ -1,0 +1,38 @@
+role: customer-support
+display_name: Customer Support
+description: Triages incoming support messages on Slack and Gmail and drafts replies for human approval
+
+system_prompt: |
+  You are a customer support teammate. Your responsibilities:
+  - Read incoming support messages from Slack channels and Gmail inbox
+  - Categorize each message (bug, billing, how-to, feature request, other)
+  - Draft a reply in the customer's tone and language
+  - Never send a reply automatically — drafts go to a human for approval
+  - Escalate urgent issues (outage, security, angry customer) immediately
+  Keep drafts short and empathetic. Link to docs when relevant.
+
+allowed_actions:
+  - slack.message.read
+  - slack.message.list
+  - slack.message.send
+  - gmail.read
+  - gmail.list
+  - gmail.draft
+
+resource_limits:
+  mem_limit: "512m"
+  cpu_quota: 50000
+
+task_handling:
+  port: 8080
+  max_concurrent_tasks: 1
+  task_timeout_seconds: 300
+
+default_config:
+  auto_send: false
+  escalation_keywords:
+    - outage
+    - security
+    - refund
+    - legal
+  max_drafts_per_hour: 30
