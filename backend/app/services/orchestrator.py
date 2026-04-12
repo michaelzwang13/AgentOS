@@ -97,5 +97,28 @@ class Orchestrator:
 
         return agent
 
+    def get_container_ip(self, agent_id: str) -> str:
+        """Return the container's IP address on the openclaw Docker network."""
+        agent = AgentModel.get_by_id(agent_id)
+        if not agent or not agent.get("container_id"):
+            raise RuntimeError(f"No running container for agent {agent_id}")
+
+        try:
+            container = self._client.containers.get(agent["container_id"])
+        except NotFound:
+            raise RuntimeError(f"Container not found for agent {agent_id}")
+
+        networks = container.attrs["NetworkSettings"]["Networks"]
+        network_name = self._settings.docker_network
+        if network_name not in networks:
+            raise RuntimeError(
+                f"Container is not attached to network {network_name}"
+            )
+
+        ip = networks[network_name]["IPAddress"]
+        if not ip:
+            raise RuntimeError(f"No IP address for agent {agent_id}")
+        return ip
+
     def list_user_agents(self, user_id: str) -> list[dict]:
         return AgentModel.list_by_user(user_id)

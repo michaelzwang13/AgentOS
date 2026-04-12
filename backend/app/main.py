@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import users, agents, gateway, credentials, auth
+from app.routers import users, agents, gateway, credentials, auth, tasks
 
 app = FastAPI(
     title="AgentOS Platform",
@@ -21,6 +21,7 @@ app.include_router(agents.router)
 app.include_router(credentials.router)
 app.include_router(gateway.router)
 app.include_router(auth.router)
+app.include_router(tasks.router)
 
 
 @app.get("/health")

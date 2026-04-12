@@ -4,6 +4,30 @@
 
 ---
 
+## 🏁 Hackathon Scope (overrides the phase plan below)
+
+This repo is currently a hackathon project. The 14–19 week phased plan below is the post-hackathon target; for the hackathon demo we collapse scope to a single walkable path.
+
+**In scope for the hackathon:**
+- **Two starter employees.** One engineering (**Code Review Engineer**, GitHub), one non-engineering (**Customer Support**, Slack + Gmail).
+- **Hire flow end-to-end** wired to the backend (`POST /agents`, `POST /credentials`). Four-step wizard: profile + autonomy tier → connect tools → brief (scope + cadence + nickname) → confirm.
+- **Talent directory + employee profile pages** — the Fiverr-like browse + detail surfaces that feed the hire flow.
+- **Real OAuth for GitHub only.** Slack and Gmail use a simulated consent screen writing a placeholder token via `POST /credentials`. One provider goes real to prove the pattern, the rest stay stubbed to keep the demo fast.
+- **Iconographic persona.** Role-only, no human names or photos.
+
+**Demo bar:** "hired and running is enough." The hackathon demo ends when a user clicks Hire, the container spins up, and the confirmation screen says the employee is live. The employee does not need to actually do real work in the demo — placeholder task execution in `agent-runtime/server.py` is fine.
+
+**Out of scope for the hackathon (ship post-hackathon):**
+- Billing, Stripe, payment gate, trial logic (Phase 6).
+- Post-hire surfaces: team page, employee workspace, work log/audit trail, performance review, offboarding UI.
+- OAuth apps beyond GitHub.
+- Additional employee roles past the two starters.
+- Public launch, landing page SEO, docs.
+
+**Frontend is being handed off mid-hackathon.** See `app/HANDOFF.md` for the incoming engineer's brief. The frontend scaffold was reset (the pre-handoff scaffold was a wrong-concept personal reader) — see git history for the scrub commit.
+
+---
+
 ## One-Liner
 
 A managed hiring platform where non-technical teams browse a talent directory of specialized AI employees, hire one in two clicks, connect their tools, and watch the employee show up in their Slack and start working.
@@ -136,14 +160,23 @@ Stripe subscriptions per hired employee. Usage tracking (actions per month, LLM 
 
 ---
 
-## Candidate First Employees (for Phase 0 validation)
+## Hackathon Starter Employees (2)
 
-Optimized for non-technical buyers and visible day-one impact:
+The hackathon demo ships exactly two employees:
+
+1. **Code Review Engineer** — engineering side. GitHub OAuth (real). Reviews every PR within 10 minutes of it opening.
+2. **Customer Support** — non-engineering side. Slack + Gmail (simulated OAuth). Triages incoming support messages and drafts replies.
+
+Both need YAML templates in `backend/agent-config/templates/` before the hire flow can actually create agents. Only `secretary.yaml` exists today — the backend engineer's next task is writing these two templates and adding a `GET /roles` endpoint.
+
+## Post-Hackathon Candidate Pool
+
+Optimized for non-technical buyers and visible day-one impact. The hackathon starters are drawn from this list; the rest ship post-hackathon.
 
 1. **Content Repurposer** — blog post in, tweets/LinkedIn/email snippets out
 2. **Meeting Notes Summarizer** — transcript in, structured notes with action items out
 3. **CRM Cleanup Manager** — connects to HubSpot/Salesforce, deduplicates, fills gaps
-4. **Support Ticket Router** — reads incoming tickets, categorizes, routes
+4. **Support Ticket Router** — reads incoming tickets, categorizes, routes *(basis for hackathon Customer Support)*
 5. **Competitor Monitor** — watches specified URLs, weekly digest in Slack
 6. **Standup Reporter** — daily summary of what changed across repos/channels
 7. **Lead Researcher** — enriches inbound leads with company/funding/tech info
@@ -195,20 +228,28 @@ Copied from `CLAUDE.md` — enforce these consistently in product copy, docs, an
 
 ---
 
-## What Needs Doing Next
+## What's Been Built
 
-Immediate actions (owners TBD):
+- [x] **Platform backend scaffold.** FastAPI backend with user management, agent lifecycle (hire/fire), credential vault, and auth gateway
+- [x] **Container orchestration.** Docker-based agent containers with per-agent isolation on a shared VPS
+- [x] **Platform → agent task dispatch.** HTTP-based task assignment, status checking, and cancellation between platform and agent containers
+- [x] **Agent runtime.** Lightweight FastAPI server inside each container that receives and executes tasks
+- [x] **Unit test suite.** 59 tests covering all backend modules (routers, services, schemas, agent runtime)
+- [x] **Role definition template.** Secretary agent YAML config with task handling settings
 
-- [ ] **Customer interviews.** 15-20 conversations with target buyers. Owner: _____
-- [ ] **Pick the first employee.** Decide from the Phase 0 list based on interview signal. Owner: _____
-- [ ] **Register OAuth apps.** GitHub, Slack, Google, HubSpot — whichever the first employee needs. Owner: _____
-- [ ] **Deploy test OpenClaw instance.** Fly.io or Railway, get it running the candidate role end-to-end. Owner: _____
-- [ ] **Sketch role definition schema.** YAML structure for tools, actions, output, memory, inputs. Owner: _____
-- [ ] **Landing page draft.** One-pager explaining the pitch; useful for both customer interviews and Phase 0 validation. Owner: _____
+## What Needs Doing Next (Hackathon)
 
-Open questions for team discussion:
+**Backend track (in progress):**
+- [ ] **Add `code-review-engineer.yaml` and `customer-support.yaml` role templates.** Mirror `secretary.yaml`'s shape with role-specific `allowed_actions`, `system_prompt`, and `default_config`.
+- [ ] **Add `GET /roles` endpoint.** Lists available templates so the frontend directory can render dynamically instead of duplicating the list.
+- [ ] **Register a real GitHub OAuth App** and wire the redirect/callback in the backend. `POST /credentials` already stores tokens — we need the consent flow in front of it.
+- [ ] **Implement real agent logic.** Replace placeholder task execution in `agent-runtime/server.py` with LLM-powered task handling.
+- [ ] **Deploy to VPS.** Get the platform + agent containers running end-to-end.
 
-- Which role do we build first? (Depends on Phase 0 outcome)
+**Frontend track (handed off — see `app/HANDOFF.md`):**
+- [ ] Build the hire flow per the HANDOFF brief. Landing → talent directory → employee profile → 4-step hire wizard → confirmation.
+
+**Post-hackathon questions (not blocking):**
 - Build the auth layer ourselves or use Nango from day one?
 - How do we handle offboarding memory — archive, delete, or keep for re-hiring?
 - What's our story if OpenClaw Cloud launches?
