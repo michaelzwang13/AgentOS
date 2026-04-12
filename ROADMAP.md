@@ -195,6 +195,15 @@ Copied from `CLAUDE.md` — enforce these consistently in product copy, docs, an
 
 ---
 
+## What's Been Built
+
+- [x] **Platform backend scaffold.** FastAPI backend with user management, agent lifecycle (hire/fire), credential vault, and auth gateway
+- [x] **Container orchestration.** Docker-based agent containers with per-agent isolation on a shared VPS
+- [x] **Platform → agent task dispatch.** HTTP-based task assignment, status checking, and cancellation between platform and agent containers
+- [x] **Agent runtime.** Lightweight FastAPI server inside each container that receives and executes tasks
+- [x] **Unit test suite.** 59 tests covering all backend modules (routers, services, schemas, agent runtime)
+- [x] **Role definition template.** Secretary agent YAML config with task handling settings
+
 ## What Needs Doing Next
 
 Immediate actions (owners TBD):
@@ -202,8 +211,8 @@ Immediate actions (owners TBD):
 - [ ] **Customer interviews.** 15-20 conversations with target buyers. Owner: _____
 - [ ] **Pick the first employee.** Decide from the Phase 0 list based on interview signal. Owner: _____
 - [ ] **Register OAuth apps.** GitHub, Slack, Google, HubSpot — whichever the first employee needs. Owner: _____
-- [ ] **Deploy test OpenClaw instance.** Fly.io or Railway, get it running the candidate role end-to-end. Owner: _____
-- [ ] **Sketch role definition schema.** YAML structure for tools, actions, output, memory, inputs. Owner: _____
+- [ ] **Deploy to VPS.** Get the platform + agent containers running end-to-end on a single VPS. Owner: _____
+- [ ] **Implement real agent logic.** Replace placeholder task execution in `agent-runtime/server.py` with LLM-powered task handling. Owner: _____
 - [ ] **Landing page draft.** One-pager explaining the pitch; useful for both customer interviews and Phase 0 validation. Owner: _____
 
 Open questions for team discussion:

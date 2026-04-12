@@ -4,7 +4,7 @@
 AI Employee Platform — "Fiverr for OpenClaw." Managed platform that packages OpenClaw instances as specialized, containerized AI employees.
 
 ## Status
-Early ideation / pre-code. See PROJECT_CONTEXT.md for full brainstorming context.
+Platform backend scaffold complete. Task dispatch system implemented (platform → agent HTTP communication). See PROJECT_CONTEXT.md for brainstorming context, ROADMAP.md for phases.
 
 ## Key Decisions Made
 - Building on top of OpenClaw, not building agent runtime from scratch
@@ -12,6 +12,23 @@ Early ideation / pre-code. See PROJECT_CONTEXT.md for full brainstorming context
 - Employees differentiated from workflows by persistent memory, initiative, judgment, and role boundaries
 - MVP: 10 employees focused on visible day-one impact
 - Target: 20-80 person teams (Series A-C)
+- Platform → agent communication via HTTP POST to container internal IPs on Docker bridge network
+- Agent runtime runs FastAPI on port 8080 inside each container
+- All containers on a single VPS, communicating over `openclaw-agents` Docker network
+
+## Backend Structure
+```
+backend/
+  app/
+    routers/       — API endpoints (users, agents, tasks, credentials, gateway)
+    services/      — Business logic (orchestrator, dispatcher, credential_store, gateway)
+    models/        — Supabase data access (user, agent, credential)
+    schemas/       — Pydantic models (user, agent, credential, task)
+    utils/         — Helpers (crypto)
+  agent-runtime/   — FastAPI server that runs inside agent containers
+  agent-config/    — Role templates (secretary.yaml)
+  tests/           — Unit tests (59 tests, all passing)
+```
 
 ## Terminology
 Always use: "AI employees", "talent directory", "onboarding", "work style", "performance review", "offboarding"

@@ -36,6 +36,21 @@ Platform (auth gateway, permissions, billing, audit trail)
 AI employee shows up in their Slack/GitHub/tools
 ```
 
+### Platform → Agent Communication (Implemented)
+Each agent container runs a lightweight FastAPI server on port 8080. The platform dispatches tasks to agents via HTTP POST to the container's internal IP on the Docker bridge network (`openclaw-agents`). All containers run on a single VPS.
+
+```
+Platform API                    Agent Container
+POST /agents/{id}/tasks    →    POST :8080/task       (assign work)
+GET  /agents/{id}/tasks/status → GET :8080/status     (check progress)
+POST /agents/{id}/tasks/cancel → POST :8080/cancel    (cancel work)
+```
+
+Key components:
+- `backend/agent-runtime/server.py` — FastAPI app inside each container (receives tasks, reports status)
+- `backend/app/services/dispatcher.py` — Platform-side HTTP client that sends tasks to containers
+- `backend/app/services/orchestrator.py` — Manages container lifecycle, resolves container IPs via Docker SDK
+
 ### Auth Model (OAuth Gateway Pattern)
 - Platform registers as OAuth App with each provider (GitHub, Slack, Linear, etc.)
 - Customer clicks "Connect GitHub" -> standard OAuth consent flow -> platform stores tokens
