@@ -11,6 +11,7 @@ export default defineConfig({
     },
   },
   server: {
+    allowedHosts: ['cucumber-spearfish-agnostic.ngrok-free.dev'],
     proxy: {
       '/api': {
         target: 'http://localhost:8000',
