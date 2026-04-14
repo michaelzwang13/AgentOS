@@ -1,4 +1,4 @@
-// Backend API client for the design-ui frontend.
+// Backend API client for the AgentOS frontend.
 // Uses Vite proxy: /api/* → http://localhost:8000/*
 // Or direct: VITE_API_URL=http://localhost:8000
 

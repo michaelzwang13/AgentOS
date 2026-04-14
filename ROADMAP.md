@@ -27,7 +27,7 @@ This repo is currently a hackathon project. The 14–19 week phased plan below i
 - Additional employee roles past the two starters.
 - Public launch, landing page SEO, docs.
 
-**Frontend is being handed off mid-hackathon.** See `app/HANDOFF.md` for the incoming engineer's brief. The frontend scaffold was reset (the pre-handoff scaffold was a wrong-concept personal reader) — see git history for the scrub commit.
+**Frontend was handed off mid-hackathon and has since been rebuilt as a Vite + React app in `app/`.** The pre-handoff Next.js scaffold was removed — see git history for the cleanup commit.
 
 ---
 
@@ -252,10 +252,10 @@ Copied from `CLAUDE.md` — enforce these consistently in product copy, docs, an
 - [x] **`GET /roles` endpoint** — lists templates via shared `template_loader` service.
 - [x] **Real agent logic** — agent runtime forwards tasks to the local OpenClaw gateway, which uses Kimi K2.5.
 - [x] **Local deploy path** — `LOCAL_SETUP.md` covers the full happy-path run on Docker Desktop.
-- [ ] **Register a real GitHub OAuth App.** Kevin owns registration; client ID/secret go to the frontend engineer as `GITHUB_OAUTH_CLIENT_ID` / `GITHUB_OAUTH_CLIENT_SECRET` env vars in `app/.env.local`. Backend does NOT own the OAuth dance — see `app/HANDOFF.md` for the split.
+- [ ] **Register a real GitHub OAuth App.** Kevin owns registration; client ID/secret land in `app/.env.local` as `GITHUB_OAUTH_CLIENT_ID` / `GITHUB_OAUTH_CLIENT_SECRET`. The frontend owns the OAuth dance; backend only stores encrypted credentials.
 
-**Frontend track (handed off — see `app/HANDOFF.md`):**
-- [ ] Build the hire flow per the HANDOFF brief. Landing → talent directory → employee profile → 4-step hire wizard → confirmation.
+**Frontend track:**
+- [ ] Build the hire flow in `app/`. Landing → talent directory → employee profile → 4-step hire wizard → confirmation.
 
 **Post-hackathon questions (not blocking):**
 - Build the auth layer ourselves or use Nango from day one?

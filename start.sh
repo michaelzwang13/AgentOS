@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 BACKEND="$ROOT/backend"
-FRONTEND="$ROOT/design-ui"
+FRONTEND="$ROOT/app"
 
 # Colors
 RED='\033[0;31m'

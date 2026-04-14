@@ -10,8 +10,7 @@ Built as a hackathon MVP. The current demo bar is "hired and running": a user ca
 
 ```
 Host (your Mac)
-├── Frontend (design-ui)     http://localhost:5173   Vite + React 19
-├── Frontend (app)           http://localhost:3000   Next.js 16 hire flow
+├── Frontend (app)           http://localhost:5173   Vite + React 19
 └── Docker Desktop
     └── openclaw-agents (bridge network)
         ├── Platform API     http://localhost:8000   FastAPI, Docker socket mounted
@@ -42,11 +41,8 @@ AgentOS/
 │   ├── migrations/           Supabase SQL migrations
 │   └── tests/                Pytest unit tests
 │
-├── design-ui/                Vite + React 19 frontend (primary, started by start.sh)
+├── app/                      Vite + React 19 frontend (started by start.sh)
 │   └── src/pages/            Home, Login, Agents, Page1-5
-│
-├── app/                      Next.js 16 hire flow (shadcn, Tailwind v4)
-│   └── app/                  landing, marketplace, agents, api
 │
 ├── start.sh                  One-shot local dev bootstrapper
 ├── LOCAL_SETUP.md            Authoritative local setup guide
@@ -85,14 +81,9 @@ Stack: Python 3.12, FastAPI, Supabase, Docker SDK, cryptography (Fernet), httpx,
 
 ---
 
-## Frontends
+## Frontend
 
-Two frontends live in the repo.
-
-- **`design-ui/`** — Vite + React 19 + React Router. This is the frontend started by `start.sh` and is what the demo uses. Pages: Home, Login, Agents, and a numbered Page1-5 flow for hire/onboarding.
-- **`app/`** — Next.js 16 with shadcn and Tailwind v4. Scoped to the hire flow (landing, talent directory, employee profile, 4-step hire wizard, confirm). See `app/HANDOFF.md` for the build brief.
-
-Note: the Next.js version in `app/` has breaking API changes vs. common Next.js knowledge. See `app/AGENTS.md`.
+`app/` — Vite + React 19 + React Router + Tailwind. Started by `start.sh` on `:5173`. Pages: Home, Login, Agents, and a numbered Page1-5 flow for hire/onboarding. The backend is reached via the Vite dev proxy (`/api/*` → `http://localhost:8000/*`), so no `BACKEND_URL` env var is needed at build time.
 
 ---
 
@@ -137,13 +128,11 @@ Full walkthrough is in `LOCAL_SETUP.md`. The short version:
    - Build the agent container image (`openclaw/agent:latest`).
    - Create the `openclaw-agents` Docker bridge network.
    - Install backend Python deps into `backend/.venv` and start FastAPI on `:8000`.
-   - Install frontend deps in `design-ui/` and start the Vite dev server on `:5173`.
+   - Install frontend deps in `app/` and start the Vite dev server on `:5173`.
 
 4. Open `http://localhost:5173/login` to create an account, then `http://localhost:5173/agents` for the Signal Feed. Click CONNECT on any tab to link Slack/Gmail/GitHub.
 
 5. Backend API docs: `http://localhost:8000/docs`.
-
-To run the Next.js hire flow instead, `cd app && npm install && npm run dev` (serves on `:3000`).
 
 ---
 
@@ -189,5 +178,5 @@ Avoid: agents, marketplace, configuration, prompt, dashboard, teardown.
 - `ROADMAP.md` — hackathon scope and post-hackathon phases
 - `PROJECT_CONTEXT.md` — product brainstorming and design decisions
 - `AGENT_SYSTEM_PROMPT.md` — system prompt the containers run with
-- `HANDOFF.md` / `app/HANDOFF.md` — frontend build brief
+- `HANDOFF.md` — backend handoff notes
 - `CLAUDE.md` — conventions for Claude Code collaborators

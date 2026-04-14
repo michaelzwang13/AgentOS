@@ -152,7 +152,7 @@ GITHUB_OAUTH_CLIENT_ID=<from github.com/settings/developers>
 GITHUB_OAUTH_CLIENT_SECRET=<from github.com/settings/developers>
 ```
 
-See `app/HANDOFF.md` for the full frontend env + OAuth split — the backend does not own the OAuth dance.
+The frontend (`app/`) handles the OAuth dance; the backend only stores the resulting encrypted credentials. Set the GitHub client ID/secret in `app/.env.local`.
 
 ---
 

@@ -40,7 +40,7 @@ backend/
 ```
 
 ## Frontend
-Frontend lives in `app/` (Next.js 16, shadcn, Tailwind v4). See `app/HANDOFF.md` for the hire flow build brief. Hackathon scope is hire flow only — do not scaffold post-hire surfaces until the hire flow is working end-to-end.
+Frontend lives in `app/` (Vite + React 19 + Tailwind). Runs on `:5173` via `bun run dev`. Hackathon scope is hire flow only — do not scaffold post-hire surfaces until the hire flow is working end-to-end.
 
 ## Terminology
 Always use: "AI employees", "talent directory", "onboarding", "work style", "performance review", "offboarding"
