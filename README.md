@@ -121,7 +121,8 @@ Full walkthrough is in `LOCAL_SETUP.md`. The short version:
 3. Run the platform and the primary frontend together:
 
    ```bash
-   ./start.sh
+   ./start.sh           # Linux / Intel Mac
+   ./start-mac.sh       # Apple Silicon Mac (forces arm64 for Python deps)
    ```
 
    This script will:
