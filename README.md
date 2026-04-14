@@ -1,4 +1,4 @@
-# OpenClaw AI Employee Platform
+# AgentOS
 
 A managed platform for hiring, onboarding, and running specialized AI employees. Think "Fiverr for OpenClaw" — each employee is a containerized OpenClaw instance with a defined role, persistent memory, and scoped access to your tools (GitHub, Slack, Gmail).
 
