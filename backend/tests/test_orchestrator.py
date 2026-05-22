@@ -74,6 +74,47 @@ class TestCreateAgent:
         assert "AGENT_CONFIG_JSON" in env
         assert json.loads(env["AGENT_CONFIG_JSON"]) == config
 
+    def test_create_agent_injects_template_and_resource_limits(
+        self, fake_supabase, mock_docker
+    ):
+        """The resolved role template rides in as base64 JSON and its
+        resource_limits cap the container."""
+        import base64
+        from app.services.orchestrator import Orchestrator
+        from app.services.template_loader import load_template
+
+        agent_data = {
+            "id": "agent-001",
+            "user_id": "user-001",
+            "role": "code-review-engineer",
+            "status": "pending",
+            "config_json": {},
+            "container_id": None,
+            "created_at": "2025-01-01T00:00:00+00:00",
+        }
+
+        agents_table = fake_supabase.get_table("agents")
+        agents_table.set_insert_result([agent_data])
+        agents_table.set_update_result(
+            [{**agent_data, "status": "running", "container_id": "ctr-123"}]
+        )
+
+        mock_container = MagicMock()
+        mock_container.id = "ctr-123"
+        mock_docker.containers.run.return_value = mock_container
+
+        orch = Orchestrator()
+        orch.create_agent("user-001", "code-review-engineer")
+
+        kwargs = mock_docker.containers.run.call_args.kwargs
+        env = kwargs["environment"]
+        decoded = json.loads(base64.b64decode(env["AGENT_TEMPLATE_B64"]))
+        assert decoded == load_template("code-review-engineer")
+
+        limits = decoded["resource_limits"]
+        assert kwargs["mem_limit"] == limits["mem_limit"]
+        assert kwargs["cpu_quota"] == limits["cpu_quota"]
+
     def test_create_agent_unknown_role_raises(self, fake_supabase, mock_docker):
         from app.services.orchestrator import Orchestrator
         from app.services.template_loader import UnknownRoleError
