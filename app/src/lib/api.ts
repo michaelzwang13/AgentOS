@@ -79,6 +79,18 @@ export async function listRoles(): Promise<Role[]> {
 
 // ── Employees / Agents ──────────────────────────────────────────────────────
 
+export type AgentStatus = 'pending' | 'running' | 'stopped' | 'error'
+
+export interface Agent {
+  id: string
+  user_id: string
+  role: string
+  container_id: string | null
+  status: AgentStatus
+  config_json: Record<string, unknown>
+  created_at: string
+}
+
 export async function hireEmployee(role: string, config: Record<string, unknown> = {}) {
   const res = await fetch(url('/agents'), {
     method: 'POST',
@@ -88,9 +100,9 @@ export async function hireEmployee(role: string, config: Record<string, unknown>
   return res.json()
 }
 
-export async function listEmployees() {
+export async function listEmployees(): Promise<Agent[]> {
   const res = await fetch(url('/agents'), { headers: headers() })
-  if (!res.ok) return []
+  if (!res.ok) throw new Error(`Could not load employees (HTTP ${res.status})`)
   return res.json()
 }
 

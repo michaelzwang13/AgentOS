@@ -3,13 +3,9 @@ import { motion } from "framer-motion"
 import { cn } from "@/lib/utils"
 import { useLocation, useNavigate } from "react-router-dom"
 import {
-  Home,
-  Monitor,
-  PlaneTakeoff,
-  TerminalSquare,
-  Tv,
-  Cpu,
   Radio,
+  LayoutGrid,
+  Activity,
   User,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
@@ -21,14 +17,10 @@ interface DockItem {
 }
 
 const navItems: DockItem[] = [
-  { icon: Home,          label: "Index",     path: "/"       },
-  { icon: Radio,         label: "Agents",    path: "/agents" },
-  { icon: Monitor,       label: "Control",   path: "/1"      },
-  { icon: PlaneTakeoff,  label: "Departures",path: "/2"      },
-  { icon: TerminalSquare,label: "Terminal",  path: "/3"      },
-  { icon: Tv,            label: "Broadcast", path: "/4"      },
-  { icon: Cpu,           label: "Schematic", path: "/5"      },
-  { icon: User,          label: "Account",   path: "/login"  },
+  { icon: Radio,      label: "Signal Feed", path: "/agents"    },
+  { icon: LayoutGrid, label: "Directory",   path: "/directory" },
+  { icon: Activity,   label: "Status",      path: "/status"    },
+  { icon: User,       label: "Account",     path: "/login"     },
 ]
 
 const floatingAnimation = {

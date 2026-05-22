@@ -167,8 +167,8 @@ export default function Agents() {
       } else {
         setDigestStatus({ kind: 'err', text: res.detail || 'Failed to post digest' })
       }
-    } catch (err) {
-      setDigestStatus({ kind: 'err', text: String(err) })
+    } catch {
+      setDigestStatus({ kind: 'err', text: 'Could not reach the server' })
     } finally {
       setDigestBusy(false)
       // auto-dismiss status after 6s
@@ -192,8 +192,15 @@ export default function Agents() {
         next.map(m => ({ role: m.role, content: m.content })),
         (full) => setMessages(m => { const u = [...m]; u[u.length - 1] = { role: 'assistant', content: full }; return u }),
       )
-    } catch (err) {
-      setMessages(m => { const u = [...m]; u[u.length - 1] = { role: 'assistant', content: `Error: ${err}` }; return u })
+    } catch {
+      setMessages(m => {
+        const u = [...m]
+        u[u.length - 1] = {
+          role: 'assistant',
+          content: 'Sorry — I couldn’t reach the agent. Check your connection and try again.',
+        }
+        return u
+      })
     } finally {
       setStreaming(false)
       setTimeout(() => inputRef.current?.focus(), 50)
