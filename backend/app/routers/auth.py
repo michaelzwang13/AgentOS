@@ -1,8 +1,9 @@
 """OAuth routes — handles provider consent flows and stores tokens in the credential vault."""
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
+from app.auth import get_current_user
 from app.config import get_settings
 from app.models.user import UserModel
 from app.services.credential_store import CredentialStore
@@ -39,14 +40,15 @@ def _backend_url() -> str:
 # ── Slack ────────────────────────────────────────────────────────────────────
 
 @router.get("/slack")
-def slack_oauth_start(api_key: str = Query(...)):
+def slack_oauth_start(user: dict = Depends(get_current_user)):
+    """Return the Slack consent URL for the authenticated caller.
+
+    Auth is the X-Api-Key header — the key is never placed in the URL, so it
+    can't leak into access logs, proxy logs, or browser history.
+    """
     settings = get_settings()
     if not settings.slack_client_id:
         raise HTTPException(500, "Slack OAuth not configured")
-
-    user = UserModel.get_by_api_key(api_key)
-    if not user:
-        raise HTTPException(401, "Invalid API key")
 
     redirect_uri = f"{_backend_url()}/api/auth/slack/callback"
     url = (
@@ -56,7 +58,7 @@ def slack_oauth_start(api_key: str = Query(...)):
         f"&redirect_uri={redirect_uri}"
         f"&state={issue_state(user['id'])}"
     )
-    return RedirectResponse(url)
+    return {"authorize_url": url}
 
 
 @router.get("/slack/callback")
@@ -115,14 +117,11 @@ async def slack_oauth_callback(
 # ── Gmail ────────────────────────────────────────────────────────────────────
 
 @router.get("/gmail")
-def gmail_oauth_start(api_key: str = Query(...)):
+def gmail_oauth_start(user: dict = Depends(get_current_user)):
+    """Return the Gmail consent URL for the authenticated caller."""
     settings = get_settings()
     if not settings.google_client_id:
         raise HTTPException(500, "Gmail OAuth not configured")
-
-    user = UserModel.get_by_api_key(api_key)
-    if not user:
-        raise HTTPException(401, "Invalid API key")
 
     redirect_uri = f"{_backend_url()}/api/auth/gmail/callback"
     url = (
@@ -135,7 +134,7 @@ def gmail_oauth_start(api_key: str = Query(...)):
         f"&prompt=consent"
         f"&state={issue_state(user['id'])}"
     )
-    return RedirectResponse(url)
+    return {"authorize_url": url}
 
 
 @router.get("/gmail/callback")
@@ -195,14 +194,11 @@ async def gmail_oauth_callback(
 # ── GitHub ───────────────────────────────────────────────────────────────────
 
 @router.get("/github")
-def github_oauth_start(api_key: str = Query(...)):
+def github_oauth_start(user: dict = Depends(get_current_user)):
+    """Return the GitHub consent URL for the authenticated caller."""
     settings = get_settings()
     if not settings.github_client_id:
         raise HTTPException(500, "GitHub OAuth not configured")
-
-    user = UserModel.get_by_api_key(api_key)
-    if not user:
-        raise HTTPException(401, "Invalid API key")
 
     redirect_uri = f"{_backend_url()}/api/auth/github/callback"
     url = (
@@ -212,7 +208,7 @@ def github_oauth_start(api_key: str = Query(...)):
         f"&scope={GITHUB_SCOPES}"
         f"&state={issue_state(user['id'])}"
     )
-    return RedirectResponse(url)
+    return {"authorize_url": url}
 
 
 @router.get("/github/callback")

@@ -172,10 +172,16 @@ export async function postSlackDigest(channel: string = '#agentos'): Promise<Dig
 
 // ── OAuth ───────────────────────────────────────────────────────────────────
 
-export function oauthUrl(service: 'slack' | 'gmail' | 'github'): string {
-  // All OAuth flows go through the backend which handles token exchange + storage
-  const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-  return `${backendUrl}/auth/${service}?api_key=${encodeURIComponent(apiKey())}`
+/**
+ * Ask the backend for a provider consent URL. The API key is sent in the
+ * X-Api-Key header (never the URL), so it can't leak into logs or history.
+ * Caller redirects the browser to the returned URL.
+ */
+export async function startOAuth(service: 'slack' | 'gmail' | 'github'): Promise<string> {
+  const res = await fetch(url(`/auth/${service}`), { headers: headers() })
+  if (!res.ok) throw new Error(`Could not start ${service} authorization`)
+  const data = await res.json()
+  return data.authorize_url as string
 }
 
 // ── Chat ────────────────────────────────────────────────────────────────────

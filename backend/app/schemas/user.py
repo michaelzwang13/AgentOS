@@ -2,8 +2,9 @@ from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
 
 
-# bcrypt truncates at 72 bytes — cap the password so truncation can't happen.
-PasswordField = Field(min_length=8, max_length=72)
+# Length is not bcrypt-bounded (passwords are SHA-256 pre-hashed); the cap is
+# only a sanity limit on request size.
+PasswordField = Field(min_length=8, max_length=256)
 
 
 class UserCreate(BaseModel):
