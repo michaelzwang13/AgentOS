@@ -23,7 +23,7 @@ class TestHireAgent:
 
     def test_hire_agent_no_auth(self, client):
         resp = client.post("/agents", json={"role": "secretary"})
-        assert resp.status_code == 422  # missing header
+        assert resp.status_code == 401  # missing API key
 
 
 class TestListAgents:

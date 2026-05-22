@@ -1,9 +1,21 @@
+import logging
 import os
 
-from fastapi import FastAPI
+import httpx
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
+from app.ratelimit import limiter
 from app.routers import users, agents, gateway, credentials, tasks, roles, auth, chat
+
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO"),
+    format="%(asctime)s %(levelname)s %(name)s — %(message)s",
+)
+logger = logging.getLogger("agentos")
 
 app = FastAPI(
     title="AgentOS Platform",
@@ -11,20 +23,43 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# The Next.js hire-flow UI runs on a different origin (localhost:3000 in dev,
-# configurable for deploys via CORS_ALLOWED_ORIGINS=comma,separated).
+# ── Rate limiting ────────────────────────────────────────────────────────────
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# ── CORS ─────────────────────────────────────────────────────────────────────
+# The hire-flow UI runs on a separate origin. Defaults cover local Vite dev;
+# production MUST set CORS_ALLOWED_ORIGINS to the real frontend origin(s).
 _cors_env = os.getenv(
     "CORS_ALLOWED_ORIGINS",
-    "http://localhost:3000,http://localhost:5173,http://localhost:5174",
+    "http://localhost:5173,http://localhost:5174",
 )
 _cors_origins = [o.strip() for o in _cors_env.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "X-Api-Key"],
 )
+
+
+# ── Exception handlers ───────────────────────────────────────────────────────
+# Internal errors are logged in full server-side but never echoed to the
+# client — responses carry only a generic message.
+
+@app.exception_handler(httpx.HTTPStatusError)
+@app.exception_handler(httpx.RequestError)
+async def upstream_error_handler(request: Request, exc: Exception):
+    logger.warning("Upstream call failed on %s %s: %s", request.method, request.url.path, exc)
+    return JSONResponse(status_code=502, content={"detail": "Upstream service error"})
+
+
+@app.exception_handler(Exception)
+async def unhandled_error_handler(request: Request, exc: Exception):
+    logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+
 
 app.include_router(users.router)
 app.include_router(agents.router)

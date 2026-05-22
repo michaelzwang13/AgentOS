@@ -6,6 +6,7 @@ from fastapi.responses import RedirectResponse
 from app.config import get_settings
 from app.models.user import UserModel
 from app.services.credential_store import CredentialStore
+from app.utils.oauth_state import issue_state, verify_state
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -53,7 +54,7 @@ def slack_oauth_start(api_key: str = Query(...)):
         f"?client_id={settings.slack_client_id}"
         f"&user_scope={SLACK_SCOPES}"
         f"&redirect_uri={redirect_uri}"
-        f"&state={api_key}"
+        f"&state={issue_state(user['id'])}"
     )
     return RedirectResponse(url)
 
@@ -72,7 +73,8 @@ async def slack_oauth_callback(
             f"{settings.frontend_url}/agents?error={error or 'missing_code'}"
         )
 
-    user = UserModel.get_by_api_key(state)
+    user_id = verify_state(state)
+    user = UserModel.get_by_id(user_id) if user_id else None
     if not user:
         return RedirectResponse(
             f"{settings.frontend_url}/agents?error=invalid_state"
@@ -131,7 +133,7 @@ def gmail_oauth_start(api_key: str = Query(...)):
         f"&scope={GMAIL_SCOPES}"
         f"&access_type=offline"
         f"&prompt=consent"
-        f"&state={api_key}"
+        f"&state={issue_state(user['id'])}"
     )
     return RedirectResponse(url)
 
@@ -150,7 +152,8 @@ async def gmail_oauth_callback(
             f"{settings.frontend_url}/agents?gmail_error={error or 'missing_code'}"
         )
 
-    user = UserModel.get_by_api_key(state)
+    user_id = verify_state(state)
+    user = UserModel.get_by_id(user_id) if user_id else None
     if not user:
         return RedirectResponse(
             f"{settings.frontend_url}/agents?gmail_error=invalid_state"
@@ -207,7 +210,7 @@ def github_oauth_start(api_key: str = Query(...)):
         f"?client_id={settings.github_client_id}"
         f"&redirect_uri={redirect_uri}"
         f"&scope={GITHUB_SCOPES}"
-        f"&state={api_key}"
+        f"&state={issue_state(user['id'])}"
     )
     return RedirectResponse(url)
 
@@ -226,7 +229,8 @@ async def github_oauth_callback(
             f"{settings.frontend_url}/agents?github_error={error or 'missing_code'}"
         )
 
-    user = UserModel.get_by_api_key(state)
+    user_id = verify_state(state)
+    user = UserModel.get_by_id(user_id) if user_id else None
     if not user:
         return RedirectResponse(
             f"{settings.frontend_url}/agents?github_error=invalid_state"

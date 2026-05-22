@@ -11,6 +11,7 @@ export default function Login() {
   const [mode, setMode] = useState<Mode>('signup')
   const [email, setEmail] = useState('')
   const [name, setName]   = useState('')
+  const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const user = getStoredUser()
@@ -53,9 +54,10 @@ export default function Login() {
     )
   }
 
+  const passwordValid = password.length >= 8
   const canSubmit = mode === 'signup'
-    ? email.trim().length > 0 && name.trim().length > 0
-    : email.trim().length > 0
+    ? email.trim().length > 0 && name.trim().length > 0 && passwordValid
+    : email.trim().length > 0 && passwordValid
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -64,9 +66,9 @@ export default function Login() {
     setError('')
     try {
       if (mode === 'signup') {
-        await signup(email.trim(), name.trim())
+        await signup(email.trim(), name.trim(), password)
       } else {
-        await login(email.trim())
+        await login(email.trim(), password)
       }
       navigate('/agents')
     } catch (err) {
@@ -89,7 +91,7 @@ export default function Login() {
           <p className="font-narrative" style={{ fontSize: 14, color: '#AAAAAA', marginTop: 8, lineHeight: 1.6 }}>
             {mode === 'signup'
               ? 'Create an account to hire AI employees and connect your tools.'
-              : 'Enter the email you signed up with to restore your session.'}
+              : 'Sign in with your email and password.'}
           </p>
         </motion.div>
 
@@ -100,7 +102,7 @@ export default function Login() {
             return (
               <button
                 key={m}
-                onClick={() => { setMode(m); setError('') }}
+                onClick={() => { setMode(m); setError(''); setPassword('') }}
                 className="font-display"
                 style={{
                   background: 'none',
@@ -154,6 +156,25 @@ export default function Login() {
               onFocus={e => (e.target.style.borderColor = 'rgba(255,128,0,0.4)')}
               onBlur={e  => (e.target.style.borderColor = 'var(--border-default)')}
             />
+          </div>
+          <div>
+            <label className="font-system" style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: '0.1em', display: 'block', marginBottom: 6 }}>PASSWORD</label>
+            <input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder={mode === 'signup' ? 'At least 8 characters' : 'Your password'}
+              autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+              className="font-narrative"
+              style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)', padding: '12px 16px', fontSize: 14, color: 'var(--text-primary)', outline: 'none' }}
+              onFocus={e => (e.target.style.borderColor = 'rgba(255,128,0,0.4)')}
+              onBlur={e  => (e.target.style.borderColor = 'var(--border-default)')}
+            />
+            {mode === 'signup' && password.length > 0 && !passwordValid && (
+              <p className="font-system" style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 6 }}>
+                Password must be at least 8 characters.
+              </p>
+            )}
           </div>
           {error && <p className="font-system" style={{ fontSize: 12, color: 'var(--status-error)' }}>{error}</p>}
           <button

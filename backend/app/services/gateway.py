@@ -27,6 +27,8 @@ class GatewayService:
                 headers={"Authorization": f"Bearer {cred['token']}"},
                 json={"raw": raw},
             )
+        # Don't report success on a 4xx/5xx — let the error surface.
+        response.raise_for_status()
         return {"status": "sent", "gmail_response": response.status_code}
 
     @staticmethod
@@ -43,6 +45,7 @@ class GatewayService:
                 headers={"Authorization": f"Bearer {cred['token']}"},
                 json={"channel": channel, "text": text},
             )
+        response.raise_for_status()
         return response.json()
 
     @staticmethod
@@ -122,4 +125,5 @@ class GatewayService:
                 headers={"Authorization": f"Bot {cred['token']}"},
                 json={"content": content},
             )
+        response.raise_for_status()
         return response.json()

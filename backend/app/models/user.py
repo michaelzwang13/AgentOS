@@ -9,9 +9,14 @@ TABLE = "users"
 
 class UserModel:
     @staticmethod
-    def create(email: str, name: str) -> dict:
+    def create(email: str, name: str, password_hash: str) -> dict:
         api_key = f"oc_{secrets.token_urlsafe(32)}"
-        data = {"email": email, "name": name, "api_key": api_key}
+        data = {
+            "email": email,
+            "name": name,
+            "api_key": api_key,
+            "password_hash": password_hash,
+        }
         result = get_supabase().table(TABLE).insert(data).execute()
         return result.data[0]
 

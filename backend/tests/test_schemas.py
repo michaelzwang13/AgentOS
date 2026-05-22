@@ -11,12 +11,16 @@ from app.schemas.task import TaskAssign, TaskResult, TaskStatus
 
 class TestUserSchemas:
     def test_user_create_valid(self):
-        u = UserCreate(email="a@b.com", name="Test")
+        u = UserCreate(email="a@b.com", name="Test", password="supersecret")
         assert u.email == "a@b.com"
 
     def test_user_create_invalid_email(self):
         with pytest.raises(ValidationError):
-            UserCreate(email="bad", name="Test")
+            UserCreate(email="bad", name="Test", password="supersecret")
+
+    def test_user_create_rejects_short_password(self):
+        with pytest.raises(ValidationError):
+            UserCreate(email="a@b.com", name="Test", password="short")
 
 
 class TestAgentSchemas:

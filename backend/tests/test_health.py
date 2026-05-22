@@ -17,19 +17,19 @@ class TestCors:
         resp = client.options(
             "/roles",
             headers={
-                "Origin": "http://localhost:3000",
+                "Origin": "http://localhost:5173",
                 "Access-Control-Request-Method": "GET",
                 "Access-Control-Request-Headers": "X-Api-Key",
             },
         )
         assert resp.status_code == 200
         assert (
-            resp.headers.get("access-control-allow-origin") == "http://localhost:3000"
+            resp.headers.get("access-control-allow-origin") == "http://localhost:5173"
         )
 
     def test_cors_header_present_on_get(self, client):
-        resp = client.get("/health", headers={"Origin": "http://localhost:3000"})
+        resp = client.get("/health", headers={"Origin": "http://localhost:5173"})
         assert resp.status_code == 200
         assert (
-            resp.headers.get("access-control-allow-origin") == "http://localhost:3000"
+            resp.headers.get("access-control-allow-origin") == "http://localhost:5173"
         )

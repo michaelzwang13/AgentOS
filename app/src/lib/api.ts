@@ -31,29 +31,32 @@ export function getStoredUser(): { id: string; email: string; name: string } | n
   return raw ? JSON.parse(raw) : null
 }
 
-export async function signup(email: string, name: string) {
+function storeSession(data: { api_key: string }) {
+  localStorage.setItem('openclaw_api_key', data.api_key)
+  localStorage.setItem('openclaw_user', JSON.stringify(data))
+}
+
+export async function signup(email: string, name: string, password: string) {
   const res = await fetch(url('/users'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, name }),
+    body: JSON.stringify({ email, name, password }),
   })
   const data = await res.json()
   if (!res.ok) throw new Error(data.detail || 'Signup failed')
-  localStorage.setItem('openclaw_api_key', data.api_key)
-  localStorage.setItem('openclaw_user', JSON.stringify(data))
+  storeSession(data)
   return data
 }
 
-export async function login(email: string) {
+export async function login(email: string, password: string) {
   const res = await fetch(url('/users/login'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email }),
+    body: JSON.stringify({ email, password }),
   })
   const data = await res.json()
   if (!res.ok) throw new Error(data.detail || 'Login failed')
-  localStorage.setItem('openclaw_api_key', data.api_key)
-  localStorage.setItem('openclaw_user', JSON.stringify(data))
+  storeSession(data)
   return data
 }
 
