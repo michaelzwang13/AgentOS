@@ -1,5 +1,7 @@
 """Platform API endpoints for assigning tasks to agents."""
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -9,6 +11,7 @@ from app.services.dispatcher import Dispatcher
 from app.services.orchestrator import Orchestrator
 
 router = APIRouter(prefix="/agents", tags=["tasks"])
+logger = logging.getLogger("agentos.tasks")
 
 
 class TaskRequest(BaseModel):
@@ -42,8 +45,9 @@ async def assign_task(
             agent_id, payload.instruction, payload.metadata
         )
         return result
-    except Exception as e:
-        raise HTTPException(502, f"Failed to reach agent: {e}")
+    except Exception:
+        logger.exception("Task dispatch failed for agent %s", agent_id)
+        raise HTTPException(502, "Could not reach the agent")
 
 
 @router.get("/{agent_id}/tasks/status")
@@ -55,8 +59,9 @@ async def get_task_status(
     _verify_agent_ownership(agent_id, user)
     try:
         return await dispatcher.get_agent_task_status(agent_id)
-    except Exception as e:
-        raise HTTPException(502, f"Failed to reach agent: {e}")
+    except Exception:
+        logger.exception("Task dispatch failed for agent %s", agent_id)
+        raise HTTPException(502, "Could not reach the agent")
 
 
 @router.post("/{agent_id}/tasks/cancel")
@@ -68,5 +73,6 @@ async def cancel_task(
     _verify_agent_ownership(agent_id, user)
     try:
         return await dispatcher.cancel_task(agent_id)
-    except Exception as e:
-        raise HTTPException(502, f"Failed to reach agent: {e}")
+    except Exception:
+        logger.exception("Task dispatch failed for agent %s", agent_id)
+        raise HTTPException(502, "Could not reach the agent")

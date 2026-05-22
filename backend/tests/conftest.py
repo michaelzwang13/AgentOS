@@ -22,6 +22,8 @@ os.environ.update(
         "OPENCLAW_AGENT_IMAGE": "openclaw/agent:latest",
         "LLM_API_KEY": "test-llm-key",
         "PLATFORM_GATEWAY_URL": "http://host.docker.internal:8000/gateway",
+        # Keep rate limits out of the way of the test suite.
+        "RATE_LIMIT_ENABLED": "false",
     }
 )
 

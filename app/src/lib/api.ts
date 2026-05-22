@@ -31,29 +31,32 @@ export function getStoredUser(): { id: string; email: string; name: string } | n
   return raw ? JSON.parse(raw) : null
 }
 
-export async function signup(email: string, name: string) {
+function storeSession(data: { api_key: string }) {
+  localStorage.setItem('openclaw_api_key', data.api_key)
+  localStorage.setItem('openclaw_user', JSON.stringify(data))
+}
+
+export async function signup(email: string, name: string, password: string) {
   const res = await fetch(url('/users'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, name }),
+    body: JSON.stringify({ email, name, password }),
   })
   const data = await res.json()
   if (!res.ok) throw new Error(data.detail || 'Signup failed')
-  localStorage.setItem('openclaw_api_key', data.api_key)
-  localStorage.setItem('openclaw_user', JSON.stringify(data))
+  storeSession(data)
   return data
 }
 
-export async function login(email: string) {
+export async function login(email: string, password: string) {
   const res = await fetch(url('/users/login'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email }),
+    body: JSON.stringify({ email, password }),
   })
   const data = await res.json()
   if (!res.ok) throw new Error(data.detail || 'Login failed')
-  localStorage.setItem('openclaw_api_key', data.api_key)
-  localStorage.setItem('openclaw_user', JSON.stringify(data))
+  storeSession(data)
   return data
 }
 
@@ -79,6 +82,18 @@ export async function listRoles(): Promise<Role[]> {
 
 // ── Employees / Agents ──────────────────────────────────────────────────────
 
+export type AgentStatus = 'pending' | 'running' | 'stopped' | 'error'
+
+export interface Agent {
+  id: string
+  user_id: string
+  role: string
+  container_id: string | null
+  status: AgentStatus
+  config_json: Record<string, unknown>
+  created_at: string
+}
+
 export async function hireEmployee(role: string, config: Record<string, unknown> = {}) {
   const res = await fetch(url('/agents'), {
     method: 'POST',
@@ -88,9 +103,9 @@ export async function hireEmployee(role: string, config: Record<string, unknown>
   return res.json()
 }
 
-export async function listEmployees() {
+export async function listEmployees(): Promise<Agent[]> {
   const res = await fetch(url('/agents'), { headers: headers() })
-  if (!res.ok) return []
+  if (!res.ok) throw new Error(`Could not load employees (HTTP ${res.status})`)
   return res.json()
 }
 
@@ -157,10 +172,16 @@ export async function postSlackDigest(channel: string = '#agentos'): Promise<Dig
 
 // ── OAuth ───────────────────────────────────────────────────────────────────
 
-export function oauthUrl(service: 'slack' | 'gmail' | 'github'): string {
-  // All OAuth flows go through the backend which handles token exchange + storage
-  const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-  return `${backendUrl}/auth/${service}?api_key=${encodeURIComponent(apiKey())}`
+/**
+ * Ask the backend for a provider consent URL. The API key is sent in the
+ * X-Api-Key header (never the URL), so it can't leak into logs or history.
+ * Caller redirects the browser to the returned URL.
+ */
+export async function startOAuth(service: 'slack' | 'gmail' | 'github'): Promise<string> {
+  const res = await fetch(url(`/auth/${service}`), { headers: headers() })
+  if (!res.ok) throw new Error(`Could not start ${service} authorization`)
+  const data = await res.json()
+  return data.authorize_url as string
 }
 
 // ── Chat ────────────────────────────────────────────────────────────────────

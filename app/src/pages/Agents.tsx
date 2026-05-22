@@ -7,7 +7,7 @@ import {
   fetchGmailMessages,
   fetchGithubActivity,
   disconnectService,
-  oauthUrl,
+  startOAuth,
   streamChat,
   postSlackDigest,
 } from '@/lib/api'
@@ -90,6 +90,9 @@ export default function Agents() {
   const [digestBusy, setDigestBusy] = useState(false)
   const [digestStatus, setDigestStatus] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
 
+  // OAuth connect state
+  const [connecting, setConnecting] = useState(false)
+
   // clock
   useEffect(() => {
     const tick = () => setClock(new Date().toLocaleTimeString('en-US', { hour12: false }))
@@ -142,12 +145,22 @@ export default function Agents() {
   const unreadCount = (items: SlackMessage[] | Email[] | GithubItem[]) =>
     items.filter(i => 'read' in i ? !i.read : (i as GithubItem).unread).length
 
-  const connectHref = oauthUrl(tab)
-
   const getContext = useCallback(
     () => buildContext(tab, slackData, gmailData, githubData),
     [tab, slackData, gmailData, githubData]
   )
+
+  async function handleConnect() {
+    if (connecting) return
+    setConnecting(true)
+    try {
+      // Full-page redirect into the provider's consent screen.
+      window.location.href = await startOAuth(tab)
+    } catch {
+      // Re-enable the button so the user can retry.
+      setConnecting(false)
+    }
+  }
 
   async function handleDisconnect() {
     await disconnectService(tab as 'slack' | 'gmail' | 'github')
@@ -167,8 +180,8 @@ export default function Agents() {
       } else {
         setDigestStatus({ kind: 'err', text: res.detail || 'Failed to post digest' })
       }
-    } catch (err) {
-      setDigestStatus({ kind: 'err', text: String(err) })
+    } catch {
+      setDigestStatus({ kind: 'err', text: 'Could not reach the server' })
     } finally {
       setDigestBusy(false)
       // auto-dismiss status after 6s
@@ -192,8 +205,15 @@ export default function Agents() {
         next.map(m => ({ role: m.role, content: m.content })),
         (full) => setMessages(m => { const u = [...m]; u[u.length - 1] = { role: 'assistant', content: full }; return u }),
       )
-    } catch (err) {
-      setMessages(m => { const u = [...m]; u[u.length - 1] = { role: 'assistant', content: `Error: ${err}` }; return u })
+    } catch {
+      setMessages(m => {
+        const u = [...m]
+        u[u.length - 1] = {
+          role: 'assistant',
+          content: 'Sorry — I couldn’t reach the agent. Check your connection and try again.',
+        }
+        return u
+      })
     } finally {
       setStreaming(false)
       setTimeout(() => inputRef.current?.focus(), 50)
@@ -347,15 +367,16 @@ export default function Agents() {
                     </span>
                   </div>
                   {!connected ? (
-                    <a
-                      href={connectHref}
+                    <button
+                      onClick={handleConnect}
+                      disabled={connecting}
                       className="font-display"
-                      style={{ fontSize: 10, color: 'var(--accent)', letterSpacing: '0.1em', padding: '4px 12px', border: '1px solid var(--accent)', borderRadius: 'var(--radius-sm)', transition: 'background 150ms' }}
+                      style={{ fontSize: 10, color: 'var(--accent)', letterSpacing: '0.1em', padding: '4px 12px', border: '1px solid var(--accent)', borderRadius: 'var(--radius-sm)', background: 'transparent', cursor: connecting ? 'default' : 'pointer', transition: 'background 150ms' }}
                       onMouseEnter={e => (e.currentTarget.style.background = 'var(--accent-dim)')}
                       onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                     >
-                      CONNECT
-                    </a>
+                      {connecting ? 'CONNECTING…' : 'CONNECT'}
+                    </button>
                   ) : (
                     <button
                       onClick={handleDisconnect}
