@@ -114,7 +114,11 @@ class Orchestrator:
                 docker_status = container.status
                 if docker_status != "running" and agent["status"] == "running":
                     new_status = "error" if docker_status == "exited" else "stopped"
-                    AgentModel.update(agent_id, status=new_status)
+                    # Clear the token: a no-longer-running agent must not
+                    # authenticate, matching stop_agent and the NotFound path.
+                    AgentModel.update(
+                        agent_id, status=new_status, agent_token=None
+                    )
                     agent["status"] = new_status
             except NotFound:
                 AgentModel.update(

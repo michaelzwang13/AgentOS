@@ -224,6 +224,42 @@ class TestStopAgent:
         assert result is None
 
 
+class TestGetAgentStatus:
+    def test_clears_agent_token_when_container_exited(self, fake_supabase, mock_docker):
+        """When Docker reports the container as no longer running, the agent
+        loses its bearer token — otherwise a caller holding the old token
+        keeps passing `get_current_agent` after the container is gone.
+        """
+        from app.services.orchestrator import Orchestrator
+
+        agent = {
+            "id": "agent-001",
+            "user_id": "user-001",
+            "role": "code-review-engineer",
+            "container_id": "ctr-123",
+            "status": "running",
+            "agent_token": "at_old_token",
+            "config_json": {},
+        }
+
+        agents_table = fake_supabase.get_table("agents")
+        agents_table.set_select_result([agent])
+        agents_table.set_update_result(
+            [{**agent, "status": "error", "agent_token": None}]
+        )
+
+        mock_container = MagicMock()
+        mock_container.status = "exited"
+        mock_docker.containers.get.return_value = mock_container
+
+        orch = Orchestrator()
+        orch.get_agent_status("agent-001")
+
+        persisted = agents_table.mock.update.call_args.args[0]
+        assert persisted["status"] == "error"
+        assert persisted["agent_token"] is None
+
+
 class TestGetContainerIp:
     def test_get_container_ip_success(self, fake_supabase, mock_docker):
         from app.services.orchestrator import Orchestrator
