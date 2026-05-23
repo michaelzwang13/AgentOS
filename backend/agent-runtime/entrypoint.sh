@@ -5,6 +5,7 @@ set -e
 
 OPENCLAW_HOME="${OPENCLAW_CONFIG_DIR:-/root/.openclaw}"
 WORKSPACE="$OPENCLAW_HOME/workspace"
+export WORKSPACE
 mkdir -p "$WORKSPACE"
 
 # Write openclaw.json with Kimi/Moonshot as the LLM provider
@@ -57,26 +58,74 @@ cat > "$OPENCLAW_HOME/openclaw.json" <<JSONEOF
 }
 JSONEOF
 
-# Write SOUL.md based on the agent role
-cat > "$WORKSPACE/SOUL.md" <<SOULEOF
-# ${AGENT_ROLE:-Agent}
+# ── Write SOUL.md + install skills from the role template ──────────────────
+# The orchestrator passes the resolved role template as base64-encoded JSON in
+# AGENT_TEMPLATE_B64. The template's `system_prompt` becomes SOUL.md and its
+# `skills` list selects which skills are installed (fallback: all skills).
 
-You are an AI employee working on the OpenClaw platform.
-Your role: **${AGENT_ROLE:-general assistant}**
-Your agent ID: ${AGENT_ID:-unknown}
-Your user ID: ${USER_ID:-unknown}
+python3 - <<'PYEOF'
+import base64, json, os, pathlib, shutil
 
-## Behavior
-- Execute tasks given to you by the platform promptly and thoroughly.
-- Always respond with structured, actionable output.
-- Stay within the boundaries of your role.
-- When a task is complete, provide a clear summary of what was done.
+workspace = pathlib.Path(os.environ["WORKSPACE"])
+role = os.environ.get("AGENT_ROLE", "Agent")
+agent_id = os.environ.get("AGENT_ID", "unknown")
+user_id = os.environ.get("USER_ID", "unknown")
 
-## Communication
-- Be professional and concise.
-- If a task is unclear, state what assumptions you made.
-- Never fabricate information.
-SOULEOF
+template = {}
+b64 = os.environ.get("AGENT_TEMPLATE_B64", "")
+if b64:
+    try:
+        template = json.loads(base64.b64decode(b64))
+    except Exception as e:
+        print(f"[entrypoint] WARNING: could not decode AGENT_TEMPLATE_B64: {e}")
+
+system_prompt = (template.get("system_prompt") or "").strip()
+display_name = template.get("display_name") or role
+
+if system_prompt:
+    soul = (
+        f"# {display_name}\n\n"
+        f"{system_prompt}\n\n"
+        "---\n"
+        f"Agent ID: {agent_id}\n"
+        f"User ID: {user_id}\n"
+    )
+    print("[entrypoint] SOUL.md written from template system_prompt")
+else:
+    soul = (
+        f"# {role}\n\n"
+        "You are an AI employee working on the OpenClaw platform.\n"
+        f"Your role: **{role}**\n"
+        f"Your agent ID: {agent_id}\n"
+        f"Your user ID: {user_id}\n\n"
+        "## Behavior\n"
+        "- Execute tasks given to you by the platform promptly and thoroughly.\n"
+        "- Always respond with structured, actionable output.\n"
+        "- Stay within the boundaries of your role.\n"
+        "- When a task is complete, provide a clear summary of what was done.\n"
+    )
+    print("[entrypoint] SOUL.md written from generic fallback (no template prompt)")
+
+(workspace / "SOUL.md").write_text(soul)
+
+# Install skills — only those named in the template, or all if none listed.
+src = pathlib.Path("/agent/skills")
+dst = workspace / "skills"
+dst.mkdir(parents=True, exist_ok=True)
+if src.is_dir():
+    available = sorted(p.name for p in src.iterdir() if p.is_dir())
+    requested = template.get("skills") or []
+    selected = requested if requested else available
+    installed = []
+    for name in selected:
+        skill_src = src / name
+        if skill_src.is_dir():
+            shutil.copytree(skill_src, dst / name, dirs_exist_ok=True)
+            installed.append(name)
+        else:
+            print(f"[entrypoint] WARNING: skill '{name}' named in template but not in image")
+    print(f"[entrypoint] Skills installed: {', '.join(installed) or '(none)'}")
+PYEOF
 
 # Write AGENTS.md with role-specific instructions
 cat > "$WORKSPACE/AGENTS.md" <<AGENTSEOF
@@ -92,15 +141,6 @@ The platform gateway is available at: ${PLATFORM_GATEWAY_URL:-http://host.docker
 Use it to send emails, Slack messages, or Discord messages on behalf of your user.
 Always include your agent token in requests: Bearer ${AGENT_TOKEN:-none}
 AGENTSEOF
-
-# ── Copy skills into OpenClaw workspace ────────────────────────────────────
-
-SKILLS_DIR="$WORKSPACE/skills"
-mkdir -p "$SKILLS_DIR"
-if [ -d /agent/skills ]; then
-    cp -r /agent/skills/* "$SKILLS_DIR/" 2>/dev/null || true
-    echo "[entrypoint] Skills installed: $(ls "$SKILLS_DIR" | tr '\n' ', ')"
-fi
 
 # ── Start services ─────────────────────────────────────────────────────────
 

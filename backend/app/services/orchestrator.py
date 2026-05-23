@@ -1,3 +1,4 @@
+import base64
 import docker
 import json
 import secrets
@@ -22,10 +23,20 @@ class Orchestrator:
             )
 
     def create_agent(self, user_id: str, role: str, config: dict | None = None, user_api_key: str = "") -> dict:
-        load_template(role)  # raises UnknownRoleError if the template is missing
+        template = load_template(role)  # raises UnknownRoleError if the template is missing
         agent = AgentModel.create(user_id, role, config)
         agent_token = f"at_{secrets.token_urlsafe(32)}"
         gateway_token = secrets.token_urlsafe(32)
+
+        # The container is shaped by its role template: the resolved template
+        # rides in as base64-encoded JSON, and the template's resource_limits
+        # cap the container (falling back to the platform defaults).
+        template_b64 = base64.b64encode(
+            json.dumps(template).encode("utf-8")
+        ).decode("ascii")
+        limits = template.get("resource_limits") or {}
+        mem_limit = limits.get("mem_limit", "512m")
+        cpu_quota = limits.get("cpu_quota", 50000)
 
         try:
             container = self._client.containers.run(
@@ -38,6 +49,7 @@ class Orchestrator:
                     "USER_API_KEY": user_api_key,
                     "AGENT_ID": agent["id"],
                     "AGENT_ROLE": role,
+                    "AGENT_TEMPLATE_B64": template_b64,
                     "AGENT_CONFIG_JSON": json.dumps(config or {}),
                     "USER_ID": user_id,
                     "LLM_API_KEY": self._settings.llm_api_key,
@@ -45,8 +57,8 @@ class Orchestrator:
                     "OPENCLAW_GATEWAY_TOKEN": gateway_token,
                 },
                 network=self._settings.docker_network,
-                mem_limit="512m",
-                cpu_quota=50000,  # 50% of one CPU
+                mem_limit=mem_limit,
+                cpu_quota=cpu_quota,  # from the role template (default: 50% of one CPU)
                 labels={
                     "openclaw.agent_id": agent["id"],
                     "openclaw.user_id": user_id,

@@ -4,6 +4,10 @@ description: Reviews every pull request within 10 minutes of it opening and post
 required_tools:
   - github
 
+skills:
+  - github-list-prs
+  - github-pr-review
+
 system_prompt: |
   You are a senior code review engineer. Your responsibilities:
   - Review every pull request within 10 minutes of it opening
