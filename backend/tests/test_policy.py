@@ -4,6 +4,8 @@ Together these are the two halves of the trust moat: get_current_agent
 resolves *who* is calling, require_action enforces *what* they may do.
 """
 
+from unittest.mock import patch
+
 import pytest
 from fastapi import HTTPException
 
@@ -66,3 +68,42 @@ class TestGetCurrentAgent:
         result = get_current_agent("Bearer at_good")
         assert result["id"] == "a1"
         assert result["user_id"] == "u1"
+
+
+class TestActionLogAudit:
+    """Phase D promotes Phase B's deny-only log line to a persisted row, and
+    extends coverage to the allow path too — every require_action call leaves
+    an audit trail."""
+
+    def test_allow_writes_audit_row(self):
+        agent = {"id": "a1", "role": "code-review-engineer"}
+        with patch("app.services.policy.ActionLogModel") as mock_log:
+            require_action(agent, "github.review.submit")
+            mock_log.record.assert_called_once()
+            kwargs = mock_log.record.call_args.kwargs
+            assert kwargs["agent_id"] == "a1"
+            assert kwargs["action"] == "github.review.submit"
+            assert kwargs["outcome"] == "allowed"
+            assert kwargs["metadata"]["role"] == "code-review-engineer"
+
+    def test_deny_writes_audit_row(self):
+        agent = {"id": "a1", "role": "code-review-engineer"}
+        with patch("app.services.policy.ActionLogModel") as mock_log:
+            with pytest.raises(HTTPException):
+                require_action(agent, "github.pr.merge")
+            mock_log.record.assert_called_once()
+            kwargs = mock_log.record.call_args.kwargs
+            assert kwargs["outcome"] == "denied"
+            assert kwargs["action"] == "github.pr.merge"
+
+    def test_audit_failure_does_not_break_request(self):
+        """A DB hiccup on the audit write must not block the policy check."""
+        agent = {"id": "a1", "role": "code-review-engineer"}
+        with patch("app.services.policy.ActionLogModel") as mock_log:
+            mock_log.record.side_effect = RuntimeError("db down")
+            # Allow path still returns cleanly.
+            require_action(agent, "github.review.submit")
+            # Deny path still raises the policy 403, not the audit error.
+            with pytest.raises(HTTPException) as exc:
+                require_action(agent, "github.pr.merge")
+            assert exc.value.status_code == 403

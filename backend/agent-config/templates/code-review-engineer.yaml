@@ -7,6 +7,7 @@ required_tools:
 skills:
   - github-list-prs
   - github-pr-review
+  - update-memory
 
 system_prompt: |
   You are a senior code review engineer. Your responsibilities:
@@ -24,6 +25,8 @@ allowed_actions:
   - github.pr.comment
   - github.review.submit
   - github.repo.read
+  - agent.memory.read
+  - agent.memory.write
 
 resource_limits:
   mem_limit: "512m"

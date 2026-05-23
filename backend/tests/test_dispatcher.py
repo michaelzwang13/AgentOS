@@ -40,6 +40,52 @@ class TestDispatchTask:
         call_url = mock_httpx_client.post.call_args[0][0]
         assert "172.18.0.5:8080/task" in call_url
 
+    @pytest.mark.asyncio
+    async def test_dispatch_task_injects_memory(self, mock_orchestrator, mock_httpx_client):
+        """The agent's persisted memory rides into the container as role_context
+        so the agent sees back what update-memory wrote on previous tasks."""
+        from app.services.dispatcher import Dispatcher
+
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"accepted": True, "task_id": "t-1"}
+        mock_resp.raise_for_status = MagicMock()
+        mock_httpx_client.post = AsyncMock(return_value=mock_resp)
+
+        with patch("app.services.dispatcher.AgentMemoryModel") as mock_mem:
+            mock_mem.list_by_agent.return_value = [
+                {"key": "style.tone", "value": "concise"},
+                {"key": "repos.acme.lang", "value": "TypeScript"},
+            ]
+            dispatcher = Dispatcher(orchestrator=mock_orchestrator)
+            await dispatcher.dispatch_task("agent-001", "Review PR #42")
+
+        body = mock_httpx_client.post.call_args.kwargs["json"]
+        assert body["role_context"]["memory"] == {
+            "style.tone": "concise",
+            "repos.acme.lang": "TypeScript",
+        }
+
+    @pytest.mark.asyncio
+    async def test_dispatch_task_memory_failure_does_not_block(
+        self, mock_orchestrator, mock_httpx_client
+    ):
+        """A memory-load failure must not block dispatch — best-effort."""
+        from app.services.dispatcher import Dispatcher
+
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"accepted": True, "task_id": "t-1"}
+        mock_resp.raise_for_status = MagicMock()
+        mock_httpx_client.post = AsyncMock(return_value=mock_resp)
+
+        with patch("app.services.dispatcher.AgentMemoryModel") as mock_mem:
+            mock_mem.list_by_agent.side_effect = RuntimeError("db down")
+            dispatcher = Dispatcher(orchestrator=mock_orchestrator)
+            result = await dispatcher.dispatch_task("agent-001", "Do X")
+
+        assert result["accepted"] is True
+        body = mock_httpx_client.post.call_args.kwargs["json"]
+        assert body["role_context"] == {"memory": {}}
+
 
 class TestGetAgentTaskStatus:
     @pytest.mark.asyncio

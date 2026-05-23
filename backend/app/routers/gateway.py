@@ -5,6 +5,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from app.auth import get_current_user
 from app.agent_auth import get_current_agent
+from app.models.agent_memory import AgentMemoryModel
+from app.models.reviewed_pr import ReviewedPRModel
 from app.services.gateway import GatewayService
 from app.services.policy import require_action
 from app.services.credential_store import CredentialStore
@@ -50,6 +52,11 @@ class GitHubPRCommentRequest(BaseModel):
 
 class DigestRequest(BaseModel):
     channel: str = "#agentos"
+
+
+class MemoryWriteRequest(BaseModel):
+    key: str
+    value: str
 
 
 # ── Write endpoints ────────────────────────────────────────────────────────────
@@ -117,12 +124,23 @@ async def create_pr_review(
 ):
     require_action(agent, "github.review.submit")
     try:
-        return await GatewayService.create_pr_review(
+        result = await GatewayService.create_pr_review(
             agent["user_id"], payload.owner, payload.repo,
             payload.pull_number, payload.body, payload.event,
         )
     except ValueError as e:
         raise HTTPException(400, str(e))
+
+    # The review landed on GitHub — record dedup so Phase C's watcher
+    # doesn't re-review this PR on the next tick. Idempotent at the
+    # DB layer via the (agent_id, owner, repo, pr_number) unique constraint.
+    if not ReviewedPRModel.exists(
+        agent["id"], payload.owner, payload.repo, payload.pull_number
+    ):
+        ReviewedPRModel.record(
+            agent["id"], payload.owner, payload.repo, payload.pull_number
+        )
+    return result
 
 
 @router.post("/github/review/comment")
@@ -138,6 +156,30 @@ async def create_pr_review_comment(
         )
     except ValueError as e:
         raise HTTPException(400, str(e))
+
+
+# ── Agent memory (agent-token auth + action policy) ────────────────────────────
+# The agent reads its own key/value store (injected into role_context at dispatch
+# in Phase C) and writes via the update-memory skill. Memory rows are scoped to
+# the calling agent_id — an agent cannot see or write another agent's memory.
+
+@router.get("/memory")
+async def list_memory(agent: dict = Depends(get_current_agent)):
+    require_action(agent, "agent.memory.read")
+    rows = AgentMemoryModel.list_by_agent(agent["id"])
+    return {"memory": [{"key": r["key"], "value": r["value"], "updated_at": r["updated_at"]} for r in rows]}
+
+
+@router.post("/memory")
+async def write_memory(
+    payload: MemoryWriteRequest,
+    agent: dict = Depends(get_current_agent),
+):
+    require_action(agent, "agent.memory.write")
+    if not payload.key:
+        raise HTTPException(400, "key is required")
+    row = AgentMemoryModel.upsert(agent["id"], payload.key, payload.value)
+    return {"key": row["key"], "value": row["value"], "updated_at": row["updated_at"]}
 
 
 @router.post("/discord/message")
