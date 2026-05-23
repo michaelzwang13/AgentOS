@@ -93,8 +93,11 @@ class TestSendDiscord:
 
 
 class TestGitHub:
-    def test_list_pull_requests(self, authed_client):
-        client, user, fake_sb = authed_client
+    """The GitHub gateway endpoints authenticate the calling agent by its
+    bearer token and enforce the role template's allowed_actions."""
+
+    def test_list_pull_requests(self, agent_client):
+        client, agent, fake_sb = agent_client
 
         with patch("app.services.gateway.CredentialStore") as mock_cs, patch(
             "app.services.gateway.httpx.AsyncClient"
@@ -110,8 +113,8 @@ class TestGitHub:
             resp = client.get("/gateway/github/pulls/owner/repo")
             assert resp.status_code == 200
 
-    def test_create_pr_review(self, authed_client):
-        client, user, fake_sb = authed_client
+    def test_create_pr_review(self, agent_client):
+        client, agent, fake_sb = agent_client
 
         with patch("app.services.gateway.CredentialStore") as mock_cs, patch(
             "app.services.gateway.httpx.AsyncClient"
@@ -136,10 +139,38 @@ class TestGitHub:
             )
             assert resp.status_code == 200
 
-    def test_github_no_credential(self, authed_client):
-        client, user, fake_sb = authed_client
+    def test_github_no_credential(self, agent_client):
+        client, agent, fake_sb = agent_client
 
         with patch("app.services.gateway.CredentialStore") as mock_cs:
             mock_cs.get.return_value = None
             resp = client.get("/gateway/github/pulls/owner/repo")
             assert resp.status_code == 400
+
+    def test_github_missing_token_401(self, client):
+        """No Authorization header — request is unauthenticated."""
+        resp = client.get("/gateway/github/pulls/owner/repo")
+        assert resp.status_code == 401
+
+    def test_github_invalid_token_401(self, client, fake_supabase):
+        """A token that resolves to no agent is rejected."""
+        fake_supabase.get_table("agents").set_select_result([])
+        resp = client.get(
+            "/gateway/github/pulls/owner/repo",
+            headers={"Authorization": "Bearer at_unknown"},
+        )
+        assert resp.status_code == 401
+
+    def test_github_action_denied_for_wrong_role(self, client, fake_supabase):
+        """A secretary agent has no GitHub actions — the policy returns 403
+        before any GitHub call is made."""
+        agent = {
+            "id": "agent-002", "user_id": "user-001", "role": "secretary",
+            "status": "running", "agent_token": "at_secretary",
+        }
+        fake_supabase.get_table("agents").set_select_result([agent])
+        resp = client.get(
+            "/gateway/github/pulls/owner/repo",
+            headers={"Authorization": "Bearer at_secretary"},
+        )
+        assert resp.status_code == 403

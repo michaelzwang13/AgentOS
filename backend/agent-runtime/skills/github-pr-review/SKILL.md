@@ -16,7 +16,7 @@ Run the following command using the `exec` tool:
 ```
 exec curl -s -X POST "${PLATFORM_GATEWAY_URL}/github/review" \
   -H "Content-Type: application/json" \
-  -H "X-Api-Key: ${USER_API_KEY}" \
+  -H "Authorization: Bearer ${AGENT_TOKEN}" \
   -d '{"owner": "REPO_OWNER", "repo": "REPO_NAME", "pull_number": PR_NUMBER, "body": "REVIEW_COMMENT", "event": "EVENT_TYPE"}'
 ```
 
@@ -32,7 +32,7 @@ exec curl -s -X POST "${PLATFORM_GATEWAY_URL}/github/review" \
 ```
 exec curl -s -X POST "${PLATFORM_GATEWAY_URL}/github/review/comment" \
   -H "Content-Type: application/json" \
-  -H "X-Api-Key: ${USER_API_KEY}" \
+  -H "Authorization: Bearer ${AGENT_TOKEN}" \
   -d '{"owner": "REPO_OWNER", "repo": "REPO_NAME", "pull_number": PR_NUMBER, "body": "COMMENT_TEXT", "path": "FILE_PATH", "line": LINE_NUMBER}'
 ```
 

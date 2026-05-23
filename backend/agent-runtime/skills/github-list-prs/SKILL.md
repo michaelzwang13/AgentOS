@@ -13,14 +13,14 @@ Use this skill to fetch open pull requests for a repository.
 
 ```
 exec curl -s "${PLATFORM_GATEWAY_URL}/github/pulls/REPO_OWNER/REPO_NAME" \
-  -H "X-Api-Key: ${USER_API_KEY}"
+  -H "Authorization: Bearer ${AGENT_TOKEN}"
 ```
 
 ## Get a specific PR
 
 ```
 exec curl -s "${PLATFORM_GATEWAY_URL}/github/pulls/REPO_OWNER/REPO_NAME/PR_NUMBER" \
-  -H "X-Api-Key: ${USER_API_KEY}"
+  -H "Authorization: Bearer ${AGENT_TOKEN}"
 ```
 
 ## Parameters

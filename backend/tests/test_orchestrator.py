@@ -115,6 +115,41 @@ class TestCreateAgent:
         assert kwargs["mem_limit"] == limits["mem_limit"]
         assert kwargs["cpu_quota"] == limits["cpu_quota"]
 
+    def test_create_agent_persists_agent_token(self, fake_supabase, mock_docker):
+        """The bearer token is persisted on the agents row once the container
+        is running, so the gateway can authenticate the agent's calls."""
+        from app.services.orchestrator import Orchestrator
+
+        agent_data = {
+            "id": "agent-001",
+            "user_id": "user-001",
+            "role": "secretary",
+            "status": "pending",
+            "config_json": {},
+            "container_id": None,
+            "created_at": "2025-01-01T00:00:00+00:00",
+        }
+
+        agents_table = fake_supabase.get_table("agents")
+        agents_table.set_insert_result([agent_data])
+        agents_table.set_update_result(
+            [{**agent_data, "status": "running", "container_id": "ctr-123"}]
+        )
+
+        mock_container = MagicMock()
+        mock_container.id = "ctr-123"
+        mock_docker.containers.run.return_value = mock_container
+
+        orch = Orchestrator()
+        orch.create_agent("user-001", "secretary")
+
+        # The token in the container env must match the one persisted to the row.
+        env = mock_docker.containers.run.call_args.kwargs["environment"]
+        persisted = agents_table.mock.update.call_args.args[0]
+        assert persisted["status"] == "running"
+        assert persisted["agent_token"] == env["AGENT_TOKEN"]
+        assert persisted["agent_token"].startswith("at_")
+
     def test_create_agent_unknown_role_raises(self, fake_supabase, mock_docker):
         from app.services.orchestrator import Orchestrator
         from app.services.template_loader import UnknownRoleError
