@@ -32,17 +32,23 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
           plugins: 'code-review@claude-code-plugins'
-          prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.issue.number }}'
+          # --comment tells /code-review to post inline comments on the PR
+          # instead of returning the review as a text result. Without it the
+          # plugin says "Since --comment was not provided, here is the review
+          # summary" and posts nothing.
+          prompt: '/code-review:code-review --comment ${{ github.repository }}/pull/${{ github.event.issue.number }}'
           # Show SDK output so permission denials are visible in the run log.
           show_full_output: true
           # - Sonnet keeps review credit cost down; Opus is overkill here.
           # - Allow the bundled github MCP tools so the plugin can actually
-          #   post the review + inline comments (previous runs were getting
-          #   denied at the action's internal tool allowlist, not by GitHub).
+          #   post the review + inline comments. The inline-comment tool
+          #   lives in its own MCP namespace (mcp__github_inline_comment__*),
+          #   separate from the general github tools (mcp__github__*), so
+          #   both prefixes need to be allowed explicitly.
           # - Cap turns so a stuck loop can't burn unbounded credits.
           claude_args: >-
             --model claude-sonnet-4-6
-            --allowed-tools "mcp__github__*"
+            --allowed-tools "mcp__github__*,mcp__github_inline_comment__*"
             --max-turns 20
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://code.claude.com/docs/en/cli-reference for available options
