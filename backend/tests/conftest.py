@@ -140,6 +140,20 @@ def authed_client(fake_supabase):
 
 
 @pytest.fixture()
+def agent_client(fake_supabase):
+    """TestClient authenticated as an agent via its bearer token.
+
+    Configures the agents table so token lookup resolves to a running
+    code-review-engineer agent. Returns (client, agent, fake_supabase).
+    """
+    agent = _make_agent(role="code-review-engineer", agent_token="at_test_token")
+    fake_supabase.get_table("agents").set_select_result([agent])
+    c = TestClient(app)
+    c.headers["Authorization"] = "Bearer at_test_token"
+    return c, agent, fake_supabase
+
+
+@pytest.fixture()
 def mock_docker():
     """Patch docker.from_env() with a controllable mock."""
     mock_client = MagicMock()
@@ -172,6 +186,7 @@ def _make_agent(**overrides):
         "container_id": "container-abc",
         "status": "running",
         "config_json": {},
+        "agent_token": None,
         "created_at": "2025-01-01T00:00:00+00:00",
     }
     base.update(overrides)

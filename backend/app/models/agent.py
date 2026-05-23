@@ -23,6 +23,22 @@ class AgentModel:
         return result.data[0] if result.data else None
 
     @staticmethod
+    def get_by_token(agent_token: str) -> dict | None:
+        """Resolve an agent by its bearer token.
+
+        Used by the gateway to authenticate agent-side callers. Only running
+        agents carry a token — it is cleared when the agent is stopped.
+        """
+        result = (
+            get_supabase()
+            .table(TABLE)
+            .select("*")
+            .eq("agent_token", agent_token)
+            .execute()
+        )
+        return result.data[0] if result.data else None
+
+    @staticmethod
     def list_by_user(user_id: str) -> list[dict]:
         result = (
             get_supabase()

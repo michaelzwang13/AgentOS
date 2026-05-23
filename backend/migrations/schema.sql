@@ -1,6 +1,6 @@
 -- AgentOS — full schema snapshot for a fresh Supabase database.
 -- Paste into Supabase SQL Editor → New query → Run.
--- Idempotent: safe to re-run. Equivalent to migrations 001 + 002 + 003.
+-- Idempotent: safe to re-run. Equivalent to migrations 001 + 002 + 003 + 004.
 
 -- ── Users ────────────────────────────────────────────────────────────────────
 create table if not exists users (
@@ -21,11 +21,13 @@ create table if not exists agents (
     status text not null default 'pending'
         check (status in ('pending', 'running', 'stopped', 'error')),
     config_json jsonb default '{}'::jsonb,
+    agent_token text,
     created_at timestamptz default now()
 );
 
 create index if not exists idx_agents_user_id on agents(user_id);
 create index if not exists idx_agents_status on agents(status);
+create unique index if not exists idx_agents_agent_token on agents(agent_token);
 
 -- ── Credentials ──────────────────────────────────────────────────────────────
 create table if not exists credentials (

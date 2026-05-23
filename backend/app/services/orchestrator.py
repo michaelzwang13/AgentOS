@@ -65,10 +65,13 @@ class Orchestrator:
                     "openclaw.role": role,
                 },
             )
+            # Persist the bearer token so the gateway can authenticate this
+            # agent's calls; it lives only as long as the container runs.
             AgentModel.update(
                 agent["id"],
                 container_id=container.id,
                 status="running",
+                agent_token=agent_token,
             )
             agent["container_id"] = container.id
             agent["status"] = "running"
@@ -92,7 +95,10 @@ class Orchestrator:
             except NotFound:
                 pass
 
-        AgentModel.update(agent_id, status="stopped", container_id=None)
+        # Clear the token: a stopped agent must not authenticate.
+        AgentModel.update(
+            agent_id, status="stopped", container_id=None, agent_token=None
+        )
         agent["status"] = "stopped"
         agent["container_id"] = None
         return agent
@@ -108,10 +114,16 @@ class Orchestrator:
                 docker_status = container.status
                 if docker_status != "running" and agent["status"] == "running":
                     new_status = "error" if docker_status == "exited" else "stopped"
-                    AgentModel.update(agent_id, status=new_status)
+                    # Clear the token: a no-longer-running agent must not
+                    # authenticate, matching stop_agent and the NotFound path.
+                    AgentModel.update(
+                        agent_id, status=new_status, agent_token=None
+                    )
                     agent["status"] = new_status
             except NotFound:
-                AgentModel.update(agent_id, status="error", container_id=None)
+                AgentModel.update(
+                    agent_id, status="error", container_id=None, agent_token=None
+                )
                 agent["status"] = "error"
                 agent["container_id"] = None
 

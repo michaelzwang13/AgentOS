@@ -4,7 +4,9 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from app.auth import get_current_user
+from app.agent_auth import get_current_agent
 from app.services.gateway import GatewayService
+from app.services.policy import require_action
 from app.services.credential_store import CredentialStore
 import httpx
 
@@ -78,15 +80,20 @@ async def send_slack_message(
         raise HTTPException(400, str(e))
 
 
-# ── GitHub endpoints ───────────────────────────────────────────────────────────
+# ── GitHub endpoints (agent-token auth + action policy) ─────────────────────────
+# These are called by agent skills, not the user-facing app. Callers
+# authenticate with their per-agent bearer token; require_action enforces the
+# role template's allowed_actions (denied-by-default). The agent's user_id is
+# used to fetch the user's stored GitHub credential.
 
 @router.get("/github/pulls/{owner}/{repo}")
 async def list_pull_requests(
     owner: str, repo: str, state: str = "open",
-    user: dict = Depends(get_current_user),
+    agent: dict = Depends(get_current_agent),
 ):
+    require_action(agent, "github.pr.list")
     try:
-        return await GatewayService.list_pull_requests(user["id"], owner, repo, state)
+        return await GatewayService.list_pull_requests(agent["user_id"], owner, repo, state)
     except ValueError as e:
         raise HTTPException(400, str(e))
 
@@ -94,10 +101,11 @@ async def list_pull_requests(
 @router.get("/github/pulls/{owner}/{repo}/{pull_number}")
 async def get_pull_request(
     owner: str, repo: str, pull_number: int,
-    user: dict = Depends(get_current_user),
+    agent: dict = Depends(get_current_agent),
 ):
+    require_action(agent, "github.pr.read")
     try:
-        return await GatewayService.get_pull_request(user["id"], owner, repo, pull_number)
+        return await GatewayService.get_pull_request(agent["user_id"], owner, repo, pull_number)
     except ValueError as e:
         raise HTTPException(400, str(e))
 
@@ -105,11 +113,12 @@ async def get_pull_request(
 @router.post("/github/review")
 async def create_pr_review(
     payload: GitHubPRReviewRequest,
-    user: dict = Depends(get_current_user),
+    agent: dict = Depends(get_current_agent),
 ):
+    require_action(agent, "github.review.submit")
     try:
         return await GatewayService.create_pr_review(
-            user["id"], payload.owner, payload.repo,
+            agent["user_id"], payload.owner, payload.repo,
             payload.pull_number, payload.body, payload.event,
         )
     except ValueError as e:
@@ -119,11 +128,12 @@ async def create_pr_review(
 @router.post("/github/review/comment")
 async def create_pr_review_comment(
     payload: GitHubPRCommentRequest,
-    user: dict = Depends(get_current_user),
+    agent: dict = Depends(get_current_agent),
 ):
+    require_action(agent, "github.pr.comment")
     try:
         return await GatewayService.create_pr_review_comment(
-            user["id"], payload.owner, payload.repo,
+            agent["user_id"], payload.owner, payload.repo,
             payload.pull_number, payload.body, payload.path, payload.line,
         )
     except ValueError as e:
