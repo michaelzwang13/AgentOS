@@ -113,12 +113,14 @@ class TestGitHub:
             resp = client.get("/gateway/github/pulls/owner/repo")
             assert resp.status_code == 200
 
-    def test_create_pr_review(self, agent_client):
+    def test_create_pr_review_records_dedup(self, agent_client):
+        """On a successful review, the gateway inserts a reviewed_prs row so
+        Phase C's watcher will not re-review this PR on the next tick."""
         client, agent, fake_sb = agent_client
 
         with patch("app.services.gateway.CredentialStore") as mock_cs, patch(
             "app.services.gateway.httpx.AsyncClient"
-        ) as mock_httpx:
+        ) as mock_httpx, patch("app.routers.gateway.ReviewedPRModel") as mock_rp:
             mock_cs.get.return_value = {"service": "github", "token": "ghp_test", "scopes": []}
             mock_resp = MagicMock(status_code=200)
             mock_resp.json.return_value = {"id": 1}
@@ -126,18 +128,43 @@ class TestGitHub:
                 return_value=MagicMock(request=AsyncMock(return_value=mock_resp))
             )
             mock_httpx.return_value.__aexit__ = AsyncMock(return_value=False)
+            mock_rp.exists.return_value = False
 
             resp = client.post(
                 "/gateway/github/review",
                 json={
-                    "owner": "acme",
-                    "repo": "api",
-                    "pull_number": 42,
-                    "body": "LGTM",
-                    "event": "APPROVE",
+                    "owner": "acme", "repo": "api", "pull_number": 42,
+                    "body": "LGTM", "event": "APPROVE",
                 },
             )
             assert resp.status_code == 200
+            mock_rp.record.assert_called_once_with(agent["id"], "acme", "api", 42)
+
+    def test_create_pr_review_skips_dedup_when_already_recorded(self, agent_client):
+        """If reviewed_prs already has the row, the gateway does not re-insert."""
+        client, agent, fake_sb = agent_client
+
+        with patch("app.services.gateway.CredentialStore") as mock_cs, patch(
+            "app.services.gateway.httpx.AsyncClient"
+        ) as mock_httpx, patch("app.routers.gateway.ReviewedPRModel") as mock_rp:
+            mock_cs.get.return_value = {"service": "github", "token": "ghp_test", "scopes": []}
+            mock_resp = MagicMock(status_code=200)
+            mock_resp.json.return_value = {"id": 1}
+            mock_httpx.return_value.__aenter__ = AsyncMock(
+                return_value=MagicMock(request=AsyncMock(return_value=mock_resp))
+            )
+            mock_httpx.return_value.__aexit__ = AsyncMock(return_value=False)
+            mock_rp.exists.return_value = True
+
+            resp = client.post(
+                "/gateway/github/review",
+                json={
+                    "owner": "acme", "repo": "api", "pull_number": 42,
+                    "body": "LGTM", "event": "APPROVE",
+                },
+            )
+            assert resp.status_code == 200
+            mock_rp.record.assert_not_called()
 
     def test_github_no_credential(self, agent_client):
         client, agent, fake_sb = agent_client
@@ -174,3 +201,64 @@ class TestGitHub:
             headers={"Authorization": "Bearer at_secretary"},
         )
         assert resp.status_code == 403
+
+
+class TestMemory:
+    """The /gateway/memory endpoints let an agent persist key/value preferences
+    across container restarts. They are agent-authed and policy-gated, so the
+    agent's role template must list agent.memory.{read,write}."""
+
+    def test_write_memory(self, agent_client):
+        client, agent, fake_sb = agent_client
+        with patch("app.routers.gateway.AgentMemoryModel") as mock_mem:
+            mock_mem.upsert.return_value = {
+                "key": "style.tone", "value": "concise",
+                "updated_at": "2026-05-23T12:00:00+00:00",
+            }
+            resp = client.post(
+                "/gateway/memory",
+                json={"key": "style.tone", "value": "concise"},
+            )
+            assert resp.status_code == 200
+            mock_mem.upsert.assert_called_once_with(agent["id"], "style.tone", "concise")
+
+    def test_read_memory(self, agent_client):
+        client, agent, fake_sb = agent_client
+        with patch("app.routers.gateway.AgentMemoryModel") as mock_mem:
+            mock_mem.list_by_agent.return_value = [
+                {"key": "style.tone", "value": "concise", "updated_at": "t"},
+                {"key": "repos.acme.lang", "value": "TypeScript", "updated_at": "t"},
+            ]
+            resp = client.get("/gateway/memory")
+            assert resp.status_code == 200
+            body = resp.json()
+            assert len(body["memory"]) == 2
+            assert {m["key"] for m in body["memory"]} == {"style.tone", "repos.acme.lang"}
+            mock_mem.list_by_agent.assert_called_once_with(agent["id"])
+
+    def test_memory_requires_token(self, client):
+        """Missing Authorization → 401."""
+        resp = client.get("/gateway/memory")
+        assert resp.status_code == 401
+
+    def test_memory_denied_without_template_permission(self, client, fake_supabase):
+        """A role whose allowed_actions lack agent.memory.* gets 403, not 200."""
+        agent = {
+            "id": "agent-x", "user_id": "user-001", "role": "customer-support",
+            "status": "running", "agent_token": "at_cs",
+        }
+        fake_supabase.get_table("agents").set_select_result([agent])
+        resp = client.get(
+            "/gateway/memory",
+            headers={"Authorization": "Bearer at_cs"},
+        )
+        assert resp.status_code == 403
+
+    def test_memory_write_requires_key(self, agent_client):
+        client, agent, fake_sb = agent_client
+        with patch("app.routers.gateway.AgentMemoryModel"):
+            resp = client.post(
+                "/gateway/memory",
+                json={"key": "", "value": "v"},
+            )
+            assert resp.status_code == 400
