@@ -24,6 +24,9 @@ os.environ.update(
         "PLATFORM_GATEWAY_URL": "http://host.docker.internal:8000/gateway",
         # Keep rate limits out of the way of the test suite.
         "RATE_LIMIT_ENABLED": "false",
+        # The PR watcher would spin up a background poll loop the moment
+        # TestClient(app) enters its lifespan; disable it for tests.
+        "PR_WATCHER_ENABLED": "false",
     }
 )
 

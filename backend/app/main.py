@@ -1,5 +1,7 @@
+import asyncio
 import logging
 import os
+from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI, Request
@@ -9,7 +11,11 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from app.ratelimit import limiter
-from app.routers import users, agents, gateway, credentials, tasks, roles, auth, chat
+from app.routers import (
+    users, agents, gateway, credentials, tasks, roles, auth, chat,
+    watched_repos,
+)
+from app.services.pr_watcher import PRWatcher
 
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO"),
@@ -17,10 +23,35 @@ logging.basicConfig(
 )
 logger = logging.getLogger("agentos")
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Start the PR watcher background task; cancel it cleanly on shutdown.
+
+    Disabled when PR_WATCHER_ENABLED=false (test suites, ad-hoc debug runs);
+    otherwise on by default.
+    """
+    watcher_task: asyncio.Task | None = None
+    if os.getenv("PR_WATCHER_ENABLED", "true").lower() != "false":
+        watcher = PRWatcher()
+        watcher_task = asyncio.create_task(watcher.run_forever())
+
+    try:
+        yield
+    finally:
+        if watcher_task is not None:
+            watcher_task.cancel()
+            try:
+                await watcher_task
+            except asyncio.CancelledError:
+                pass
+
+
 app = FastAPI(
     title="AgentOS Platform",
     description="Multi-tenant platform for hiring AI employees",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 # ── Rate limiting ────────────────────────────────────────────────────────────
@@ -70,6 +101,7 @@ app.include_router(roles.router)
 app.include_router(auth.router)
 app.include_router(auth.compat_router)
 app.include_router(chat.router)
+app.include_router(watched_repos.router)
 
 
 @app.get("/health")

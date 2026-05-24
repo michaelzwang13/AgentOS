@@ -53,15 +53,40 @@ create table if not exists reviewed_prs (
 
 create index if not exists idx_reviewed_prs_agent_id on reviewed_prs(agent_id);
 
+-- ── Phase C — autonomous PR review ───────────────────────────────────────────
+-- Repos each agent is subscribed to. The platform's pr_watcher polls these on
+-- a 120s cadence and dispatches review tasks for unreviewed open PRs.
+--
+-- unique(user_id, owner, repo) prevents two agents owned by the same user
+-- from watching the same repo (#28): without it, both would dispatch a
+-- review of the same PR, doubling token cost and posting duplicate reviews.
+-- user_id is duplicated from agents.user_id so the constraint can sit on
+-- this row directly without a join.
+create table if not exists watched_repos (
+    id uuid primary key default gen_random_uuid(),
+    agent_id uuid references agents(id) on delete cascade not null,
+    user_id uuid references users(id) on delete cascade not null,
+    owner text not null,
+    repo text not null,
+    created_at timestamptz default now(),
+    unique(user_id, owner, repo)
+);
+
+create index if not exists idx_watched_repos_agent_id on watched_repos(agent_id);
+create index if not exists idx_watched_repos_user_id on watched_repos(user_id);
+
 -- RLS — same closed-by-default pattern as the existing tables.
 alter table agent_memory enable row level security;
 alter table agent_action_log enable row level security;
 alter table reviewed_prs enable row level security;
+alter table watched_repos enable row level security;
 
 drop policy if exists "Service role full access on agent_memory" on agent_memory;
 drop policy if exists "Service role full access on agent_action_log" on agent_action_log;
 drop policy if exists "Service role full access on reviewed_prs" on reviewed_prs;
+drop policy if exists "Service role full access on watched_repos" on watched_repos;
 
 create policy "Service role full access on agent_memory" on agent_memory for all using (true);
 create policy "Service role full access on agent_action_log" on agent_action_log for all using (true);
 create policy "Service role full access on reviewed_prs" on reviewed_prs for all using (true);
+create policy "Service role full access on watched_repos" on watched_repos for all using (true);
