@@ -14,4 +14,8 @@ services:
 networks:
   openclaw:
     name: openclaw-agents
-    driver: bridge
+    # The network is also used by agent containers spawned via the Docker SDK
+    # (backend/app/services/orchestrator.py), so we treat it as externally
+    # owned — Compose attaches to it but doesn't create or destroy it.
+    # Either start-mac-compose.sh or start-mac.sh creates it if missing.
+    external: true
