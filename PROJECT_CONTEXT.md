@@ -73,13 +73,13 @@ When a task arrives, the task server sends the instruction to OpenClaw's local `
 - Customer clicks "Connect GitHub" -> standard OAuth consent flow -> platform stores tokens
 - OpenClaw containers NEVER hold raw tokens
 - Auth gateway sits between container and external APIs:
-  1. Validates request
-  2. Checks role permissions ("can comment but NOT merge")
-  3. Injects OAuth token
-  4. Logs action (audit trail)
+  1. Validates request — **✅ Phase B: agent-side `get_current_agent` resolves the calling agent by its bearer token (`backend/app/agent_auth.py`).**
+  2. Checks role permissions ("can comment but NOT merge") — **✅ Phase B: `require_action` denied-by-default against the template's `allowed_actions` for the GitHub surface; other surfaces tracked in #17.**
+  3. Injects OAuth token — ✅ user's stored credential is fetched server-side by agent_id → user_id.
+  4. Logs action (audit trail) — **✅ Phase D: `agent_action_log` row written for every allow and deny.**
   5. Forwards to API
-- Configurable autonomy: gateway can hold actions for customer approval or pass through
-- Offboarding = revoke token, one click
+- Configurable autonomy: gateway can hold actions for customer approval or pass through *(not yet built)*
+- Offboarding = revoke token, one click — partially: `stop_agent` clears the per-agent bearer token; user-side OAuth revocation not yet wired.
 
 ### Per-Employee Isolation
 - One container per employee per customer
@@ -131,9 +131,9 @@ Preserved from the pre-hackathon brainstorm. Optimized for visible impact within
 4. **LLM costs vs low price point tension** — container + API calls + memory = $30-50/month floor per employee
 
 ## Defensible Layers (in order of priority)
-1. **Skill marketplace** — curated, tested skill packages that specialize raw OpenClaw into roles
-2. **Trust infrastructure** — permissions, audit, approval flows
-3. **Memory/coaching layer** — employees that get better at their specific job over time, cross-customer learnings
+1. **Skill marketplace** — curated, tested skill packages that specialize raw OpenClaw into roles. *Partial: the template's `skills` list now drives which skills install per role (Phase A); the broader marketplace UX is post-hackathon.*
+2. **Trust infrastructure** — permissions, audit, approval flows. *Partial: permissions enforced for the GitHub surface, audit log persisted for every agent-authed call (Phases B + D); approval flows not yet built; #17 brings other surfaces to parity.*
+3. **Memory/coaching layer** — employees that get better at their specific job over time, cross-customer learnings. *Partial: per-agent persistent memory with dispatch-time injection (Phase D); LLM-driven memory compaction / "coaching" is the moat candidate tracked in #23; cross-customer learning is not yet built.*
 
 ## Target Customer
 20-80 person teams (Series A-C startups). Big enough to have real pain, small enough to not have dedicated specialists for every function, culturally open to trying new tools.
