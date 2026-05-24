@@ -5,6 +5,7 @@ import secrets
 from docker.errors import NotFound, APIError
 from app.config import get_settings
 from app.models.agent import AgentModel
+from app.models.watched_repo import WatchedRepoModel
 from app.services.template_loader import load_template
 
 
@@ -94,6 +95,11 @@ class Orchestrator:
                 container.remove()
             except NotFound:
                 pass
+
+        # Release the agent's repo subscriptions so a re-hire under the same
+        # user can take the same (owner, repo) — #31. agent_memory /
+        # agent_action_log / reviewed_prs are preserved as the audit trail.
+        WatchedRepoModel.delete_by_agent(agent_id)
 
         # Clear the token: a stopped agent must not authenticate.
         AgentModel.update(
