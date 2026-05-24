@@ -51,6 +51,24 @@ class AgentModel:
         return result.data
 
     @staticmethod
+    def list_running_by_role(role: str) -> list[dict]:
+        """Return every running agent for a given role.
+
+        Used by the pr_watcher to enumerate Code Review Engineers it should
+        poll on behalf of. Filters on status='running' so stopped/errored
+        agents drop out of the watcher loop automatically.
+        """
+        result = (
+            get_supabase()
+            .table(TABLE)
+            .select("*")
+            .eq("role", role)
+            .eq("status", "running")
+            .execute()
+        )
+        return result.data
+
+    @staticmethod
     def update(agent_id: str, **fields) -> dict | None:
         result = (
             get_supabase().table(TABLE).update(fields).eq("id", agent_id).execute()
