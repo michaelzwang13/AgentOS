@@ -4,6 +4,8 @@ Run the full OpenClaw platform, agent containers, and hire-flow frontend on your
 
 > Retiring note: `VPS_SETUP.md` is retired as of 2026-04-12. VPS deploy is post-hackathon.
 
+> **Drift notice.** Sections of this file still describe the pre-migration Next.js + Docker Compose setup. The frontend has since moved to Vite (`app/`, port 5173) and the backend runs natively via `start-mac.sh` / `start.sh`. Migration in flight in issue #11. Treat `CLAUDE.md` and `start-mac.sh` as the current source of truth.
+
 ---
 
 ## What runs where
@@ -73,7 +75,9 @@ python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().
 
 ## 3. Create the Supabase tables
 
-In your Supabase project → **SQL Editor** → **New query** → paste the contents of `backend/migrations/001_initial_schema.sql` → **Run**.
+In your Supabase project → **SQL Editor** → **New query** → paste the contents of `backend/migrations/schema.sql` → **Run**. This single file is the consolidated fresh-install snapshot covering migrations 001 (users / agents / credentials), 002 (GitHub credentials), 003 (password hash), and 004 (per-agent bearer token + memory + action log + reviewed PRs).
+
+If you're upgrading an existing DB rather than starting fresh, run the individual `00X_*.sql` migrations in order. All migrations are idempotent (`create table if not exists`, `alter table ... add column if not exists`).
 
 If you skip this, `POST /users` fails on first call with a `relation "users" does not exist` error.
 
@@ -83,7 +87,7 @@ If you skip this, `POST /users` fails on first call with a `relation "users" doe
 docker build -t openclaw/agent:latest backend/agent-runtime/
 ```
 
-**Do not skip this.** If this image is missing, `docker compose up` still starts the platform, but the first `POST /agents` fails at runtime with `No such image: openclaw/agent:latest`.
+**Do not skip this.** If this image is missing, the first `POST /agents` fails at runtime with `No such image: openclaw/agent:latest`. Rebuild after any change under `backend/agent-runtime/` (Dockerfile, `entrypoint.sh`, or any skill folder — e.g., after editing or adding a `SKILL.md`).
 
 ## 5. Start the platform
 
@@ -210,7 +214,7 @@ pip install -e ".[dev]"
 pytest
 ```
 
-All 68 tests run with mocked Supabase and Docker — no live infra required.
+All 125 tests run with mocked Supabase and Docker — no live infra required. On Apple Silicon, run with `arch -arm64 .venv/bin/python -m pytest` instead, or `pydantic-core` / other native wheels fail to import.
 
 ---
 

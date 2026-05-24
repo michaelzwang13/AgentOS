@@ -62,13 +62,13 @@ Non-technical buyers don't want to configure automation. They want to hire teamm
 
 An AI employee is not a workflow with a friendlier name. It's a specialized, boundaried identity. Raw OpenClaw specialization is a suggestion (a prompt). Ours is structural. Five layers of enforcement:
 
-1. **Tool Lockdown** — each employee's container ships with only the skills its role needs. No shell, no browser, no file access unless the role calls for it. The employee can't go off-script because the tools to go off-script don't exist in its environment.
-2. **Action Gateway** — every API call flows through a central gateway that checks the action against the role's policy (read/write/delete per resource). CRM Cleanup can update contacts, not delete them. Content Repurposer can draft, not publish.
-3. **Output Schema Validation** — each role has a defined output shape. Responses are validated before any action is taken. Invalid outputs trigger retries. This prevents role drift.
-4. **Scoped Memory** — each employee has its own typed memory store with role-specific fields. The employee literally cannot accumulate context outside its role because there's nowhere to store it.
-5. **Input Filtering** — employees only receive data relevant to their job. The Support Ticket Router never sees engineering Slack. The Competitor Monitor never sees internal data.
+1. **Tool Lockdown** — each employee's container ships with only the skills its role needs. No shell, no browser, no file access unless the role calls for it. The employee can't go off-script because the tools to go off-script don't exist in its environment. **✅ Built (Phase A) — template `skills` list filters skill install at container boot.**
+2. **Action Gateway** — every API call flows through a central gateway that checks the action against the role's policy (read/write/delete per resource). CRM Cleanup can update contacts, not delete them. Content Repurposer can draft, not publish. **✅ Built for the GitHub surface (Phase B) — `require_action` denied-by-default against the template's `allowed_actions`, plus every call audit-logged to `agent_action_log` (Phase D). Code Review Engineer is provably unable to merge/close/push. Other gateway endpoints (email/Slack/Discord) still need the same treatment — tracked in #17.**
+3. **Output Schema Validation** — each role has a defined output shape. Responses are validated before any action is taken. Invalid outputs trigger retries. This prevents role drift. *(Not yet built.)*
+4. **Scoped Memory** — each employee has its own typed memory store with role-specific fields. The employee literally cannot accumulate context outside its role because there's nowhere to store it. **✅ Built (Phase D) — `agent_memory` is per-`agent_id` and the dispatcher injects only the calling agent's memory into `role_context`. Compaction (LRU / LLM reflection) tracked in #23.**
+5. **Input Filtering** — employees only receive data relevant to their job. The Support Ticket Router never sees engineering Slack. The Competitor Monitor never sees internal data. *(Not yet built.)*
 
-**This is the moat.** The UI and the hiring metaphor are the wedge. The enforcement layer is why trust exists.
+**This is the moat.** The UI and the hiring metaphor are the wedge. The enforcement layer is why trust exists. Three of the five layers are now real for the Code Review Engineer; bringing other roles to parity is tracked in #17.
 
 ---
 
@@ -233,34 +233,41 @@ Copied from `CLAUDE.md` — enforce these consistently in product copy, docs, an
 
 ## What's Been Built
 
-- [x] **Platform backend scaffold.** FastAPI backend with user management, agent lifecycle (hire/fire), credential vault, and auth gateway
-- [x] **Container orchestration.** Docker-based agent containers with per-agent isolation, run locally on Docker Desktop for the hackathon
-- [x] **Platform → agent task dispatch.** HTTP-based task assignment, status checking, and cancellation between platform and agent containers
-- [x] **Agent runtime.** Lightweight FastAPI server inside each container that receives and executes tasks
-- [x] **OpenClaw integration.** Agent containers run the official OpenClaw gateway with Kimi (Moonshot AI) as the backend LLM. Tasks are forwarded to OpenClaw's OpenAI-compatible `/v1/chat/completions` endpoint.
-- [x] **LLM calls verified end-to-end.** Container builds, OpenClaw gateway starts with Kimi K2.5, tasks produce real LLM responses.
-- [x] **Role definition templates.** Secretary, Code Review Engineer, and Customer Support YAMLs with allowed actions, required tools, system prompts, and OpenClaw model settings.
-- [x] **`GET /roles` endpoint + `template_loader` service** feeding the frontend talent directory.
-- [x] **Unit test suite.** 78 tests covering all backend modules (routers, services, schemas, agent runtime, OpenClaw integration).
-- [x] **Local deploy guide.** `LOCAL_SETUP.md` covers the full happy-path run on Docker Desktop.
-- [x] **Start script.** `start.sh` launches Docker image build, backend, and frontend in one command.
+**Platform foundation**
+- [x] **Platform backend scaffold.** FastAPI with user management, agent lifecycle (hire/fire), credential vault, auth.
+- [x] **Container orchestration.** Docker-based agent containers, one per hired employee, local Docker Desktop for the hackathon.
+- [x] **Platform → agent task dispatch.** HTTP-based task assignment, status checking, and cancellation.
+- [x] **Agent runtime.** Lightweight FastAPI sidecar inside each container that receives and executes tasks.
+- [x] **OpenClaw + Kimi integration verified end-to-end.** Container builds, gateway starts with Kimi K2.5, real LLM responses.
+- [x] **Role definition templates.** Secretary, Code Review Engineer, Customer Support YAMLs.
+- [x] **`GET /roles` + `template_loader` service** feeding the talent directory.
+- [x] **Local deploy guide + start script.** `LOCAL_SETUP.md` (parts now stale post-Vite migration; tracked in #11) and `start-mac.sh` / `start.sh`.
 
-## What Needs Doing Next (Hackathon)
+**Production hardening (PR #2, merged)**
+- [x] Real password-based login with bcrypt + SHA-256 pre-hash (sidesteps 72-byte truncation).
+- [x] Signed HMAC OAuth state tokens.
+- [x] slowapi rate limiting; FastAPI global exception handlers; CORS lockdown.
+- [x] Frontend route guards, error boundary, friendly errors, minimal Vitest suite (PR #4).
 
-**Backend track:**
-- [x] **Role templates** — `code-review-engineer.yaml` and `customer-support.yaml` live in `backend/agent-config/templates/`.
-- [x] **`GET /roles` endpoint** — lists templates via shared `template_loader` service.
-- [x] **Real agent logic** — agent runtime forwards tasks to the local OpenClaw gateway, which uses Kimi K2.5.
-- [x] **Local deploy path** — `LOCAL_SETUP.md` covers the full happy-path run on Docker Desktop.
-- [ ] **Register a real GitHub OAuth App.** Kevin owns registration; client ID/secret land in `app/.env.local` as `GITHUB_OAUTH_CLIENT_ID` / `GITHUB_OAUTH_CLIENT_SECRET`. The frontend owns the OAuth dance; backend only stores encrypted credentials.
+**Code Review Engineer specialization** (the "make one employee real" epic, #10)
+- [x] **Phase A — Template-driven runtime (#6, PR #19).** Orchestrator base64-encodes the resolved role template into `AGENT_TEMPLATE_B64`; `entrypoint.sh` decodes it, writes `SOUL.md` from `system_prompt`, installs only the skills the template lists, applies `resource_limits`.
+- [x] **Phase B — Enforced action policy (#7, PR #20).** Per-agent bearer token persisted on `agents.agent_token`; `get_current_agent` dependency; `require_action` denied-by-default against the template's `allowed_actions`. The four GitHub gateway endpoints converted to agent-auth + policy.
+- [x] **Phase D — Memory & work log (#8, PR #25).** `agent_memory` (key/value per agent), `agent_action_log` (allow + deny rows for every agent-authed call), `reviewed_prs` (dedup for Phase C). `update-memory` skill; dispatcher injects memory into `role_context` on every dispatch.
+- [ ] **Phase C — Autonomous PR-watcher (#9).** FastAPI `lifespan` poll loop, `watched_repos` table + endpoint, dispatches reviews within minutes, dedups against `reviewed_prs`.
 
-**Frontend track:**
-- [ ] Build the hire flow in `app/`. Landing → talent directory → employee profile → 4-step hire wizard → confirmation.
+**Tests:** 125 backend unit tests passing.
 
-**Post-hackathon questions (not blocking):**
-- Build the auth layer ourselves or use Nango from day one?
-- How do we handle offboarding memory — archive, delete, or keep for re-hiring?
-- What's our story if OpenClaw Cloud launches?
+## Backlog (post-hackathon)
+
+- **AWS deployment via CDK** (#11) — EC2 + Docker (Fargate ruled out by the Docker-socket spawn model), ECR + Secrets Manager + ALB/ACM + S3/CloudFront.
+- **Frontend do-over** (#12) — rebuild `app/` as a coherent product UI around hire → onboard → monitor → review.
+- **Hire & offboard flow** (#13) — `/directory` lists roles but has no hire action; `hireEmployee()` / `fireEmployee()` exist in `app/src/lib/api.ts` but are never called.
+- **CI for backend + frontend tests** (#14) — only Claude review workflows exist today.
+- **`backend/.env.example`** (#15) — `LOCAL_SETUP.md` tells contributors to copy it but the file doesn't exist.
+- **Reconcile docs with reality** (#11) — `README.md`, `ROADMAP.md`, `PROJECT_CONTEXT.md` partially addressed; `LOCAL_SETUP.md` still references the old Next.js/Compose setup.
+- **Bring Customer Support & Secretary to A/B/D parity** (#17) — they still run the generic container with no enforced boundaries.
+- **Stop passing secrets as plaintext Docker env vars** (#18).
+- **Agent memory compaction via LLM reflection** (#23) — the interesting moat candidate. Mechanical eviction → heuristic clustering → LLM-driven consolidation.
 
 ---
 
