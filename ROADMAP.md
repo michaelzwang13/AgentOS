@@ -241,7 +241,7 @@ Copied from `CLAUDE.md` — enforce these consistently in product copy, docs, an
 - [x] **OpenClaw + Kimi integration verified end-to-end.** Container builds, gateway starts with Kimi K2.5, real LLM responses.
 - [x] **Role definition templates.** Secretary, Code Review Engineer, Customer Support YAMLs.
 - [x] **`GET /roles` + `template_loader` service** feeding the talent directory.
-- [x] **Local deploy guide + start script.** `LOCAL_SETUP.md` (parts now stale post-Vite migration; tracked in #11) and `start-mac.sh` / `start.sh`.
+- [x] **Local deploy guide + start script.** `LOCAL_SETUP.md` (parts now stale post-Vite migration; tracked in #16) and `start-mac.sh` / `start.sh` / `start-mac-compose.sh`.
 
 **Production hardening (PR #2, merged)**
 - [x] Real password-based login with bcrypt + SHA-256 pre-hash (sidesteps 72-byte truncation).
@@ -253,9 +253,9 @@ Copied from `CLAUDE.md` — enforce these consistently in product copy, docs, an
 - [x] **Phase A — Template-driven runtime (#6, PR #19).** Orchestrator base64-encodes the resolved role template into `AGENT_TEMPLATE_B64`; `entrypoint.sh` decodes it, writes `SOUL.md` from `system_prompt`, installs only the skills the template lists, applies `resource_limits`.
 - [x] **Phase B — Enforced action policy (#7, PR #20).** Per-agent bearer token persisted on `agents.agent_token`; `get_current_agent` dependency; `require_action` denied-by-default against the template's `allowed_actions`. The four GitHub gateway endpoints converted to agent-auth + policy.
 - [x] **Phase D — Memory & work log (#8, PR #25).** `agent_memory` (key/value per agent), `agent_action_log` (allow + deny rows for every agent-authed call), `reviewed_prs` (dedup for Phase C). `update-memory` skill; dispatcher injects memory into `role_context` on every dispatch.
-- [ ] **Phase C — Autonomous PR-watcher (#9).** FastAPI `lifespan` poll loop, `watched_repos` table + endpoint, dispatches reviews within minutes, dedups against `reviewed_prs`.
+- [x] **Phase C — Autonomous PR-watcher (#9, PR #29).** FastAPI `lifespan`-driven 120s asyncio poll loop scans every running CRE's `watched_repos`, lists open PRs via GitHub, dedups against `reviewed_prs`, dispatches a review task per unreviewed PR. Startup staleness gate (~30 min) prevents replaying old PRs; per-(agent, repo) error isolation; offboarding releases `watched_repos` rows (PR #32) so a re-hire under the same user can re-take the slot.
 
-**Tests:** 125 backend unit tests passing.
+**Tests:** 143 backend unit tests passing.
 
 ## Backlog (post-hackathon)
 
@@ -264,7 +264,7 @@ Copied from `CLAUDE.md` — enforce these consistently in product copy, docs, an
 - **Hire & offboard flow** (#13) — `/directory` lists roles but has no hire action; `hireEmployee()` / `fireEmployee()` exist in `app/src/lib/api.ts` but are never called.
 - **CI for backend + frontend tests** (#14) — only Claude review workflows exist today.
 - **`backend/.env.example`** (#15) — `LOCAL_SETUP.md` tells contributors to copy it but the file doesn't exist.
-- **Reconcile docs with reality** (#11) — `README.md`, `ROADMAP.md`, `PROJECT_CONTEXT.md` partially addressed; `LOCAL_SETUP.md` still references the old Next.js/Compose setup.
+- **Reconcile docs with reality** (#16) — `README.md`, `ROADMAP.md`, `PROJECT_CONTEXT.md`, `CLAUDE.md` reflect the shipped phases; `LOCAL_SETUP.md` still references the old Next.js/Compose setup and is the remaining work.
 - **Bring Customer Support & Secretary to A/B/D parity** (#17) — they still run the generic container with no enforced boundaries.
 - **Stop passing secrets as plaintext Docker env vars** (#18).
 - **Agent memory compaction via LLM reflection** (#23) — the interesting moat candidate. Mechanical eviction → heuristic clustering → LLM-driven consolidation.

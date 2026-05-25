@@ -39,7 +39,7 @@ AI employee shows up in their Slack/GitHub/tools
 ```
 
 ### Platform → Agent Communication (Implemented)
-Each agent container runs a lightweight FastAPI server on port 8080. The platform dispatches tasks to agents via HTTP POST to the container's internal IP on the Docker bridge network (`openclaw-agents`). All containers run on a single VPS.
+Each agent container runs a lightweight FastAPI server on port 8080. The platform dispatches tasks to agents via HTTP POST to the container's internal IP on the Docker bridge network (`openclaw-agents`). For the hackathon everything runs locally on Docker Desktop; VPS / cloud deploy is post-hackathon (`#11`).
 
 ```
 Platform API                    Agent Container
