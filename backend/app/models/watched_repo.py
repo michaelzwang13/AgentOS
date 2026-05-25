@@ -91,3 +91,20 @@ class WatchedRepoModel:
             .execute()
         )
         return len(result.data) > 0
+
+    @staticmethod
+    def delete_by_agent(agent_id: str) -> None:
+        """Remove every watched_repos row for an agent.
+
+        Called by Orchestrator.stop_agent so an offboarded agent stops
+        occupying its (user, owner, repo) slot — otherwise the cross-agent
+        uniqueness from #28 would block re-hiring against the same repo
+        (#31). Fire-and-forget: we don't care about the row count.
+        """
+        (
+            get_supabase()
+            .table(TABLE)
+            .delete()
+            .eq("agent_id", agent_id)
+            .execute()
+        )

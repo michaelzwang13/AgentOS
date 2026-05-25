@@ -223,6 +223,34 @@ class TestStopAgent:
         result = orch.stop_agent("nonexistent")
         assert result is None
 
+    def test_stop_agent_releases_watched_repos(self, fake_supabase, mock_docker):
+        """Offboarding must release the agent's repo subscriptions so a
+        re-hire under the same user can take the same (owner, repo) — #31.
+        Audit tables (agent_memory / agent_action_log / reviewed_prs) are
+        intentionally untouched."""
+        from app.services.orchestrator import Orchestrator
+
+        agent = {
+            "id": "agent-001",
+            "user_id": "user-001",
+            "role": "code-review-engineer",
+            "container_id": "ctr-123",
+            "status": "running",
+            "config_json": {},
+        }
+        agents_table = fake_supabase.get_table("agents")
+        agents_table.set_select_result([agent])
+        agents_table.set_update_result([{**agent, "status": "stopped"}])
+        mock_docker.containers.get.return_value = MagicMock()
+
+        with patch(
+            "app.services.orchestrator.WatchedRepoModel.delete_by_agent"
+        ) as mock_delete:
+            orch = Orchestrator()
+            orch.stop_agent("agent-001")
+
+        mock_delete.assert_called_once_with("agent-001")
+
 
 class TestGetAgentStatus:
     def test_clears_agent_token_when_container_exited(self, fake_supabase, mock_docker):
