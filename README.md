@@ -144,7 +144,7 @@ Full walkthrough is in `LOCAL_SETUP.md`. The short version:
 
 ## Tests
 
-Backend has 125 passing unit tests:
+Backend has 143 passing unit tests:
 
 ```bash
 cd backend
@@ -163,11 +163,11 @@ On Apple Silicon use `arch -arm64 .venv/bin/python -m pytest` instead — see `C
 - LLM execution inside containers via OpenClaw + Kimi.
 - Hardening pass merged (real password login, OAuth state signing, rate limiting, CORS, error handling, frontend route guards + minimal Vitest suite).
 
-**Code Review Engineer specialization — 3 of 4 phases shipped**
+**Code Review Engineer specialization — all 4 phases shipped**
 - **Phase A — Template-driven runtime.** The role template shapes the container (system_prompt → SOUL.md, skills filter, resource_limits applied). PR #19.
 - **Phase B — Enforced action policy.** Per-agent bearer token + denied-by-default `allowed_actions` check at the gateway. The Code Review Engineer is provably unable to merge/close/push. PR #20.
 - **Phase D — Memory & work log.** Per-agent key/value memory (writes via the `update-memory` skill, reads back via dispatch-time injection), full audit log of every agent-authed call (allow + deny), `reviewed_prs` dedup index. PR #25.
-- **Phase C — Autonomous PR-watcher.** Next. Polls watched repos and dispatches reviews within minutes.
+- **Phase C — Autonomous PR-watcher.** `lifespan`-driven 120s asyncio poll loop scans every running CRE's `watched_repos`, dedups against `reviewed_prs`, and dispatches a review task per unreviewed open PR. PR #29.
 
 **Backlog (post-hackathon)**
 - AWS deployment via CDK (#11), frontend do-over (#12), agent memory compaction via LLM reflection (#23), other roles brought up to A/B/D parity (#17), hire/offboard UI (#13), CI for backend + frontend tests (#14).

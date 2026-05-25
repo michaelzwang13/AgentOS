@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project
 AgentOS — "Fiverr for OpenClaw." Managed platform that packages OpenClaw instances as specialized, containerized AI employees. See `README.md`, `ROADMAP.md`, and `PROJECT_CONTEXT.md` for product context; `LOCAL_SETUP.md` is the authoritative setup guide.
 
-**Status: hackathon mode, post-hackathon depth in progress.** Demo bar was "hired and running"; the Code Review Engineer is now also a differentiated, trust-moated, memory-backed employee. Three of the four "make one employee real" phases have shipped (A: template-driven runtime; B: enforced action policy; D: agent memory + work log). Phase C (autonomous PR-watcher) is next. LLM execution is live end-to-end via OpenClaw + Kimi K2.5.
+**Status: hackathon mode, post-hackathon depth in progress.** Demo bar was "hired and running"; the Code Review Engineer is now a differentiated, trust-moated, memory-backed, autonomous employee. All four "make one employee real" phases have shipped: A (template-driven runtime), B (enforced action policy), C (autonomous PR-watcher), D (agent memory + work log). LLM execution is live end-to-end via OpenClaw + Kimi K2.5.
 
 ## Architecture (read this before editing)
 
@@ -22,7 +22,8 @@ Host (Mac)
 - **Each agent container** runs the official OpenClaw gateway as the engine plus a FastAPI sidecar (`backend/agent-runtime/server.py`) on port 8080. The sidecar accepts `POST /task` with a token (`openclaw-internal` by default) and proxies to OpenClaw's OpenAI-compatible `/v1/chat/completions`.
 - **Template-driven container shape (Phase A).** The orchestrator base64-encodes the resolved role template into `AGENT_TEMPLATE_B64`; `entrypoint.sh` decodes it, writes `SOUL.md` from the template's `system_prompt`, and installs only the skills the template lists. `resource_limits` from the template cap the Docker container.
 - **Agent-side auth + action policy (Phase B).** The orchestrator mints a per-agent bearer token and persists it on `agents.agent_token` while the container runs. Agent-authed gateway endpoints (currently the 4 GitHub ones) use `get_current_agent` (`backend/app/agent_auth.py`) instead of `get_current_user`, and call `require_action` (`backend/app/services/policy.py`) before doing work. Denied-by-default against the role template's `allowed_actions`.
-- **Memory + audit log (Phase D).** Per-agent key/value memory (`agent_memory` table) the agent writes via the `update-memory` skill and reads back as injected `role_context` on every dispatch — survives container restarts. Every agent-authed gateway call writes a row to `agent_action_log` (allow + deny). `reviewed_prs` is the dedup table Phase C's watcher will read.
+- **Memory + audit log (Phase D).** Per-agent key/value memory (`agent_memory` table) the agent writes via the `update-memory` skill and reads back as injected `role_context` on every dispatch — survives container restarts. Every agent-authed gateway call writes a row to `agent_action_log` (allow + deny). `reviewed_prs` is the dedup table the Phase C watcher reads.
+- **Autonomous PR-watcher (Phase C).** FastAPI `lifespan` starts an asyncio poll loop (`backend/app/services/pr_watcher.py`) that scans every running Code Review Engineer's `watched_repos` rows every 120s, lists open PRs via the GitHub API, dedups against `reviewed_prs`, and dispatches a review task per unreviewed PR. Startup staleness gate (~30 min) prevents replaying old PRs; per-(agent, repo) error isolation keeps a bad subscription from breaking others; offboarding releases `watched_repos` rows so a re-hire under the same user can re-take the slot.
 - **LLM** is Kimi (Moonshot AI) — `moonshot/kimi-k2.5` — wired via `openclaw.json` inside the agent image. The chat-completions endpoint must be explicitly enabled in that config.
 - **Persistence** is Supabase only (users, hired employees, encrypted credentials, per-agent memory + action log + reviewed PRs). User credentials are Fernet-encrypted at rest in `backend/app/services/credential_store.py`; agent tokens are stored plaintext (rotated on stop).
 - **OAuth fidelity (hackathon):** GitHub is real OAuth; Slack/Gmail use a simulated consent screen that writes a placeholder token via `POST /credentials`.
@@ -58,7 +59,7 @@ bun run build                  # tsc -b && vite build
 bun run lint                   # eslint .
 ```
 
-Backend tests (125 tests):
+Backend tests (143 tests):
 ```bash
 cd backend
 arch -arm64 .venv/bin/python -m pytest                              # all
