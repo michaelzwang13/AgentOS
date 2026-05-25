@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { DockNav } from '@/components/ui/dock-nav'
 import {
   isLoggedIn,
   fetchSlackMessages,
@@ -68,29 +67,24 @@ export default function Agents() {
   const [tab, setTab]     = useState<Tab>('slack')
   const [clock, setClock] = useState('')
 
-  // Connection states
   const [slackConn,  setSlackConn]  = useState(false)
   const [gmailConn,  setGmailConn]  = useState(false)
   const [githubConn, setGithubConn] = useState(false)
 
-  // Data states
   const [slackData,  setSlackData]  = useState<SlackMessage[]>(MOCK_SLACK)
   const [gmailData,  setGmailData]  = useState<Email[]>(MOCK_GMAIL)
   const [githubData, setGithubData] = useState<GithubItem[]>(MOCK_GITHUB)
   const [feedLoading, setFeedLoading] = useState(true)
 
-  // Chat states
   const [messages,  setMessages]  = useState<ChatMsg[]>([])
   const [input,     setInput]     = useState('')
   const [streaming, setStreaming] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const inputRef   = useRef<HTMLInputElement>(null)
 
-  // Digest-to-Slack state
   const [digestBusy, setDigestBusy] = useState(false)
   const [digestStatus, setDigestStatus] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
 
-  // OAuth connect state
   const [connecting, setConnecting] = useState(false)
 
   // clock
@@ -120,7 +114,7 @@ export default function Agents() {
     ]).finally(() => setFeedLoading(false))
   }, [])
 
-  // Handle OAuth redirect params
+  // OAuth redirect params
   useEffect(() => {
     const p = new URLSearchParams(window.location.search)
     if (p.get('connected') === 'true' || p.get('connected') === 'slack') {
@@ -135,10 +129,7 @@ export default function Agents() {
     if (p.toString()) window.history.replaceState({}, '', '/agents')
   }, [])
 
-  // reset chat on tab switch
   useEffect(() => { setMessages([]); setInput('') }, [tab])
-
-  // scroll to bottom
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
   const connected = tab === 'slack' ? slackConn : tab === 'gmail' ? gmailConn : githubConn
@@ -154,10 +145,8 @@ export default function Agents() {
     if (connecting) return
     setConnecting(true)
     try {
-      // Full-page redirect into the provider's consent screen.
       window.location.href = await startOAuth(tab)
     } catch {
-      // Re-enable the button so the user can retry.
       setConnecting(false)
     }
   }
@@ -184,7 +173,6 @@ export default function Agents() {
       setDigestStatus({ kind: 'err', text: 'Could not reach the server' })
     } finally {
       setDigestBusy(false)
-      // auto-dismiss status after 6s
       setTimeout(() => setDigestStatus(null), 6000)
     }
   }
@@ -221,93 +209,100 @@ export default function Agents() {
   }
 
   const TABS: { id: Tab; label: string }[] = [
-    { id: 'slack',  label: 'SLACK'  },
-    { id: 'gmail',  label: 'GMAIL'  },
-    { id: 'github', label: 'GITHUB' },
+    { id: 'slack',  label: 'Slack'  },
+    { id: 'gmail',  label: 'Gmail'  },
+    { id: 'github', label: 'GitHub' },
   ]
 
   return (
-    <div className="dot-grid" style={{ minHeight: '100vh', background: 'var(--black)' }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '80px 40px 160px', display: 'flex', flexDirection: 'column', gap: 48 }}>
+    <div className="dot-grid" style={{ minHeight: '100vh' }}>
+      <div style={{ maxWidth: 1180, margin: '0 auto', padding: '40px 40px 96px', display: 'flex', flexDirection: 'column', gap: 28 }}>
 
         {/* ── Header ── */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: 0.4 }}
-          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}
+          transition={{ duration: 0.3 }}
+          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}
         >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span className="font-display" style={{ fontSize: 11, color: 'var(--accent)', letterSpacing: '0.15em' }}>
-                OPENCLAW / AGENT OPS
-              </span>
-              {/* connection dots */}
-              <div style={{ display: 'flex', gap: 6, marginLeft: 4 }}>
-                {[
-                  { code: 'SLK', live: slackConn },
-                  { code: 'GML', live: gmailConn },
-                  { code: 'GHB', live: githubConn },
-                ].map(({ code, live }) => (
-                  <div key={code} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <div style={{ width: 5, height: 5, borderRadius: '50%', background: live ? 'var(--accent)' : 'var(--status-idle)', animation: live ? 'pulse-status 1.5s ease-in-out infinite' : 'none' }} />
-                    <span className="font-system" style={{ fontSize: 8, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>{code}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <h1 className="font-display" style={{ fontSize: 38, color: 'var(--text-primary)', letterSpacing: '0.04em', lineHeight: 1.1 }}>
-              SIGNAL FEED
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <h1 style={{
+              fontSize: 26,
+              fontWeight: 600,
+              color: 'var(--text-primary)',
+              letterSpacing: '-0.01em',
+              lineHeight: 1.1,
+            }}>
+              Signal feed
             </h1>
-            <p className="font-narrative" style={{ fontSize: 15, color: '#AAAAAA', maxWidth: 420, lineHeight: 1.65 }}>
+            <p style={{ fontSize: 14, color: 'var(--text-secondary)', maxWidth: 460, lineHeight: 1.55 }}>
               Live streams from your connected tools. Query each agent inline.
             </p>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
-            <span className="font-display" style={{ fontSize: 32, color: '#555555' }}>{clock}</span>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-              <button
-                onClick={handlePostDigest}
-                disabled={digestBusy}
-                className="font-display"
-                style={{
-                  background: digestBusy ? 'var(--surface-raised)' : 'var(--accent)',
-                  border: `1px solid ${digestBusy ? 'var(--border-default)' : 'var(--accent)'}`,
-                  borderRadius: 'var(--radius-sm)',
-                  padding: '8px 16px',
-                  fontSize: 10,
-                  letterSpacing: '0.12em',
-                  color: digestBusy ? 'var(--text-muted)' : '#000',
-                  cursor: digestBusy ? 'default' : 'pointer',
-                  transition: 'all 150ms ease',
-                }}
-              >
-                {digestBusy ? 'POSTING…' : 'POST DIGEST → #AGENTOS'}
-              </button>
-              {digestStatus && (
-                <span
-                  className="font-system"
-                  style={{
-                    fontSize: 10,
-                    letterSpacing: '0.08em',
-                    color: digestStatus.kind === 'ok' ? 'var(--accent)' : 'var(--status-error)',
-                    maxWidth: 260,
-                    textAlign: 'right',
-                  }}
-                >
-                  {digestStatus.text}
-                </span>
-              )}
+            <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
+              {[
+                { code: 'Slack',  live: slackConn },
+                { code: 'Gmail',  live: gmailConn },
+                { code: 'GitHub', live: githubConn },
+              ].map(({ code, live }) => (
+                <div key={code} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <div style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: '50%',
+                    background: live ? 'var(--accent)' : 'var(--status-idle)',
+                    animation: live ? 'pulse-status 1.5s ease-in-out infinite' : 'none',
+                  }} />
+                  <span style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 11,
+                    color: live ? 'var(--text-secondary)' : 'var(--text-tertiary)',
+                  }}>
+                    {code}
+                  </span>
+                </div>
+              ))}
             </div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text-tertiary)' }}>{clock}</span>
+            <button
+              onClick={handlePostDigest}
+              disabled={digestBusy}
+              style={{
+                background: digestBusy ? 'var(--surface-raised)' : 'var(--accent)',
+                border: `1px solid ${digestBusy ? 'var(--border-default)' : 'var(--accent)'}`,
+                borderRadius: 'var(--radius-md)',
+                padding: '8px 14px',
+                fontSize: 13,
+                fontWeight: 500,
+                color: digestBusy ? 'var(--text-tertiary)' : '#000',
+                cursor: digestBusy ? 'default' : 'pointer',
+                transition: 'background 120ms ease',
+              }}
+              onMouseEnter={e => { if (!digestBusy) e.currentTarget.style.background = 'var(--accent-hover)' }}
+              onMouseLeave={e => { if (!digestBusy) e.currentTarget.style.background = 'var(--accent)' }}
+            >
+              {digestBusy ? 'Posting…' : 'Post digest to #agentos'}
+            </button>
+            {digestStatus && (
+              <span style={{
+                fontSize: 12,
+                color: digestStatus.kind === 'ok' ? 'var(--accent)' : 'var(--status-error)',
+                maxWidth: 260,
+                textAlign: 'right',
+              }}>
+                {digestStatus.text}
+              </span>
+            )}
           </div>
         </motion.div>
 
         {/* ── Tab strip ── */}
         <motion.div
-          initial={{ opacity: 0, y: 12 }}
+          initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1, duration: 0.4 }}
-          style={{ display: 'flex', borderBottom: '1px solid var(--border-default)', gap: 0 }}
+          transition={{ delay: 0.08, duration: 0.25 }}
+          style={{ display: 'flex', borderBottom: '1px solid var(--border-subtle)', gap: 2 }}
         >
           {TABS.map(t => {
             const data = t.id === 'slack' ? slackData : t.id === 'gmail' ? gmailData : githubData
@@ -318,21 +313,31 @@ export default function Agents() {
                 key={t.id}
                 onClick={() => setTab(t.id)}
                 style={{
-                  background: 'none',
-                  padding: '10px 22px',
+                  padding: '10px 16px',
                   marginBottom: -1,
                   borderBottom: active ? '2px solid var(--accent)' : '2px solid transparent',
-                  color: active ? 'var(--accent)' : 'var(--text-muted)',
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  transition: 'color 150ms ease',
+                  color: active ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  fontSize: 13,
+                  fontWeight: active ? 500 : 400,
+                  transition: 'color 120ms ease',
                 }}
-                className="font-display"
                 onMouseEnter={e => { if (!active) e.currentTarget.style.color = 'var(--text-secondary)' }}
-                onMouseLeave={e => { if (!active) e.currentTarget.style.color = 'var(--text-muted)' }}
+                onMouseLeave={e => { if (!active) e.currentTarget.style.color = 'var(--text-tertiary)' }}
               >
-                <span style={{ fontSize: 13, letterSpacing: '0.12em' }}>{t.label}</span>
+                <span>{t.label}</span>
                 {n > 0 && (
-                  <span className="font-system" style={{ fontSize: 9, background: 'var(--accent)', color: '#000', borderRadius: 'var(--radius-pill)', padding: '1px 6px', fontWeight: 700 }}>
+                  <span style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 10,
+                    background: active ? 'var(--accent)' : 'var(--surface-raised)',
+                    color: active ? '#000' : 'var(--text-secondary)',
+                    borderRadius: 'var(--radius-pill)',
+                    padding: '1px 7px',
+                    fontWeight: 600,
+                  }}>
                     {n}
                   </span>
                 )}
@@ -345,45 +350,88 @@ export default function Agents() {
         <AnimatePresence mode="wait">
           <motion.div
             key={tab}
-            initial={{ opacity: 0, y: 10 }}
+            initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
             style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}
           >
 
             {/* ── Feed panel ── */}
-            <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', overflow: 'hidden', display: 'flex', flexDirection: 'column', height: 600 }}>
+            <div style={{
+              background: 'var(--surface)',
+              borderRadius: 'var(--radius-lg)',
+              border: '1px solid var(--border-subtle)',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              height: 600,
+            }}>
               {/* header */}
-              <div style={{ padding: '18px 28px', borderBottom: '1px solid var(--border-default)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
-                <span className="font-display" style={{ fontSize: 12, color: 'var(--accent)', letterSpacing: '0.12em' }}>
-                  {tab.toUpperCase()} FEED
+              <div style={{
+                padding: '12px 20px',
+                borderBottom: '1px solid var(--border-subtle)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexShrink: 0,
+              }}>
+                <span style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 11,
+                  color: 'var(--text-tertiary)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.08em',
+                }}>
+                  {tab} feed
                 </span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: connected ? 'var(--accent)' : 'var(--status-idle)', animation: connected ? 'pulse-status 1.5s ease-in-out infinite' : 'none' }} />
-                    <span className="font-system" style={{ fontSize: 10, color: '#555', letterSpacing: '0.1em' }}>
-                      {connected ? 'LIVE' : 'DEMO'}
+                    <div style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: '50%',
+                      background: connected ? 'var(--accent)' : 'var(--status-idle)',
+                      animation: connected ? 'pulse-status 1.5s ease-in-out infinite' : 'none',
+                    }} />
+                    <span style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 11,
+                      color: 'var(--text-tertiary)',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.06em',
+                    }}>
+                      {connected ? 'Live' : 'Demo'}
                     </span>
                   </div>
                   {!connected ? (
                     <button
                       onClick={handleConnect}
                       disabled={connecting}
-                      className="font-display"
-                      style={{ fontSize: 10, color: 'var(--accent)', letterSpacing: '0.1em', padding: '4px 12px', border: '1px solid var(--accent)', borderRadius: 'var(--radius-sm)', background: 'transparent', cursor: connecting ? 'default' : 'pointer', transition: 'background 150ms' }}
-                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--accent-dim)')}
+                      style={{
+                        fontSize: 12,
+                        color: 'var(--accent)',
+                        padding: '4px 12px',
+                        border: '1px solid var(--accent)',
+                        borderRadius: 'var(--radius-sm)',
+                        background: 'transparent',
+                        cursor: connecting ? 'default' : 'pointer',
+                        transition: 'background 120ms',
+                        fontWeight: 500,
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--accent-subtle)')}
                       onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                     >
-                      {connecting ? 'CONNECTING…' : 'CONNECT'}
+                      {connecting ? 'Connecting…' : 'Connect'}
                     </button>
                   ) : (
                     <button
                       onClick={handleDisconnect}
-                      className="font-system"
-                      style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: '0.1em' }}
+                      style={{ fontSize: 12, color: 'var(--text-tertiary)' }}
+                      onMouseEnter={e => (e.currentTarget.style.color = 'var(--text-primary)')}
+                      onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-tertiary)')}
                     >
-                      DISCONNECT
+                      Disconnect
                     </button>
                   )}
                 </div>
@@ -394,87 +442,77 @@ export default function Agents() {
                 <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <div style={{ display: 'flex', gap: 6 }}>
                     {[0, 150, 300].map(d => (
-                      <div key={d} style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--text-muted)', animation: `pulse-status 1.2s ease-in-out ${d}ms infinite` }} />
+                      <div key={d} style={{
+                        width: 5,
+                        height: 5,
+                        borderRadius: '50%',
+                        background: 'var(--text-tertiary)',
+                        animation: `pulse-status 1.2s ease-in-out ${d}ms infinite`,
+                      }} />
                     ))}
                   </div>
                 </div>
               ) : (
                 <div style={{ overflowY: 'auto', flex: 1 }}>
                   {tab === 'slack' && slackData.map((msg, i) => (
-                    <motion.div
-                      key={msg.id}
-                      initial={{ opacity: 0, x: -8 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.05, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-                      style={{ padding: '18px 28px', borderBottom: '1px solid var(--surface-raised)', borderLeft: !msg.read ? '2px solid var(--accent)' : '2px solid transparent', transition: 'background 120ms' }}
-                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-raised)')}
-                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                    >
+                    <FeedRow key={msg.id} index={i} unread={!msg.read}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span className="font-display" style={{ fontSize: 13, color: !msg.read ? 'var(--text-primary)' : '#AAAAAA' }}>{msg.user}</span>
-                          <span className="font-system" style={{ fontSize: 9, color: 'var(--accent)', background: 'var(--accent-dim)', borderRadius: 4, padding: '2px 7px', letterSpacing: '0.06em' }}>#{msg.channel}</span>
-                          {msg.priority === 'high' && <span className="font-system" style={{ fontSize: 9, color: 'var(--status-error)', letterSpacing: '0.1em' }}>URGENT</span>}
+                          <span style={{ fontSize: 13, fontWeight: 600, color: !msg.read ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
+                            {msg.user}
+                          </span>
+                          <Pill tone="accent">#{msg.channel}</Pill>
+                          {msg.priority === 'high' && <Pill tone="error">Urgent</Pill>}
                         </div>
-                        <span className="font-system" style={{ fontSize: 10, color: '#666' }}>{msg.time}</span>
+                        <Meta>{msg.time}</Meta>
                       </div>
-                      <p className="font-narrative" style={{ margin: 0, fontSize: 14, color: '#AAAAAA', lineHeight: 1.65 }}>{msg.text}</p>
-                    </motion.div>
+                      <p style={{ margin: 0, fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{msg.text}</p>
+                    </FeedRow>
                   ))}
 
                   {tab === 'gmail' && gmailData.map((email, i) => (
-                    <motion.div
-                      key={email.id}
-                      initial={{ opacity: 0, x: -8 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.05, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-                      style={{ padding: '16px 24px', borderBottom: '1px solid var(--surface-raised)', borderLeft: !email.read ? '2px solid var(--accent)' : '2px solid transparent', transition: 'background 120ms' }}
-                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-raised)')}
-                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                    >
+                    <FeedRow key={email.id} index={i} unread={!email.read}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span className="font-display" style={{ fontSize: 13, color: !email.read ? 'var(--text-primary)' : '#AAAAAA' }}>{email.from}</span>
-                          {email.priority === 'high' && <span className="font-system" style={{ fontSize: 9, color: 'var(--status-error)', letterSpacing: '0.1em' }}>URGENT</span>}
+                          <span style={{ fontSize: 13, fontWeight: 600, color: !email.read ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
+                            {email.from}
+                          </span>
+                          {email.priority === 'high' && <Pill tone="error">Urgent</Pill>}
                         </div>
-                        <span className="font-system" style={{ fontSize: 10, color: '#666' }}>{email.time}</span>
+                        <Meta>{email.time}</Meta>
                       </div>
-                      <p className="font-display" style={{ margin: '0 0 5px', fontSize: 12, color: !email.read ? 'var(--text-primary)' : '#AAAAAA', letterSpacing: '0.03em' }}>{email.subject}</p>
-                      <p className="font-narrative" style={{ margin: '0 0 10px', fontSize: 13, color: '#777', lineHeight: 1.6 }}>{email.body}</p>
+                      <p style={{ margin: '0 0 5px', fontSize: 13, fontWeight: 500, color: !email.read ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
+                        {email.subject}
+                      </p>
+                      <p style={{ margin: '0 0 10px', fontSize: 13, color: 'var(--text-tertiary)', lineHeight: 1.55 }}>
+                        {email.body}
+                      </p>
                       {email.labels.length > 0 && (
                         <div style={{ display: 'flex', gap: 4 }}>
-                          {email.labels.map(l => (
-                            <span key={l} className="font-system" style={{ fontSize: 9, color: '#666', background: 'var(--surface-raised)', border: '1px solid var(--border-default)', borderRadius: 4, padding: '2px 7px' }}>{l}</span>
-                          ))}
+                          {email.labels.map(l => <Pill key={l} tone="neutral">{l}</Pill>)}
                         </div>
                       )}
-                    </motion.div>
+                    </FeedRow>
                   ))}
 
                   {tab === 'github' && githubData.map((item, i) => (
-                    <motion.div
-                      key={item.id}
-                      initial={{ opacity: 0, x: -8 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.05, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-                      style={{ padding: '16px 24px', borderBottom: '1px solid var(--surface-raised)', borderLeft: item.unread ? '2px solid var(--accent)' : '2px solid transparent', transition: 'background 120ms' }}
-                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-raised)')}
-                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                    >
+                    <FeedRow key={item.id} index={i} unread={item.unread}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span className="font-system" style={{ fontSize: 9, color: item.type === 'PR' ? '#00DD77' : '#AAAAAA', border: `1px solid ${item.type === 'PR' ? '#00DD77' : 'var(--border-default)'}`, borderRadius: 4, padding: '2px 6px', letterSpacing: '0.06em' }}>{item.type}</span>
-                          <span className="font-system" style={{ fontSize: 10, color: 'var(--accent)' }}>{item.repo}</span>
-                          {item.state === 'draft' && <span className="font-system" style={{ fontSize: 9, color: '#555', letterSpacing: '0.08em' }}>DRAFT</span>}
+                          <Pill tone={item.type === 'PR' ? 'success' : 'neutral'}>{item.type}</Pill>
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent)' }}>{item.repo}</span>
+                          {item.state === 'draft' && <Pill tone="neutral">Draft</Pill>}
                         </div>
-                        <span className="font-system" style={{ fontSize: 10, color: '#666' }}>{item.time}</span>
+                        <Meta>{item.time}</Meta>
                       </div>
-                      <p className="font-narrative" style={{ margin: '0 0 7px', fontSize: 14, color: item.unread ? 'var(--text-primary)' : '#AAAAAA', lineHeight: 1.55 }}>{item.title}</p>
-                      <div style={{ display: 'flex', gap: 14 }}>
-                        <span className="font-system" style={{ fontSize: 10, color: '#666' }}>{item.reason}</span>
-                        {item.author && <span className="font-system" style={{ fontSize: 10, color: '#666' }}>@{item.author}</span>}
+                      <p style={{ margin: '0 0 6px', fontSize: 14, color: item.unread ? 'var(--text-primary)' : 'var(--text-secondary)', lineHeight: 1.5 }}>
+                        {item.title}
+                      </p>
+                      <div style={{ display: 'flex', gap: 12 }}>
+                        <Meta>{item.reason}</Meta>
+                        {item.author && <Meta>@{item.author}</Meta>}
                       </div>
-                    </motion.div>
+                    </FeedRow>
                   ))}
                 </div>
               )}
@@ -482,40 +520,82 @@ export default function Agents() {
 
             {/* ── Query panel ── */}
             <motion.div
-              initial={{ opacity: 0, y: 12 }}
+              initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15, duration: 0.4 }}
-              style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', display: 'flex', flexDirection: 'column', height: 600 }}
+              transition={{ delay: 0.1, duration: 0.25 }}
+              style={{
+                background: 'var(--surface)',
+                borderRadius: 'var(--radius-lg)',
+                border: '1px solid var(--border-subtle)',
+                display: 'flex',
+                flexDirection: 'column',
+                height: 600,
+              }}
             >
-              {/* header */}
-              <div style={{ padding: '18px 28px', borderBottom: '1px solid var(--border-default)', flexShrink: 0 }}>
-                <span className="font-display" style={{ fontSize: 12, color: 'var(--accent)', letterSpacing: '0.12em' }}>
-                  QUERY / {tab.toUpperCase()} AGENT
+              <div style={{
+                padding: '12px 20px',
+                borderBottom: '1px solid var(--border-subtle)',
+                flexShrink: 0,
+              }}>
+                <span style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 11,
+                  color: 'var(--text-tertiary)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.08em',
+                }}>
+                  Query · {tab} agent
                 </span>
               </div>
 
               {/* messages */}
-              <div style={{ flex: 1, overflowY: 'auto', padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <div style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {messages.length === 0 && (
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    transition={{ delay: 0.2 }}
-                    style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+                    transition={{ delay: 0.15 }}
+                    style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
                   >
-                    <span className="font-system" style={{ fontSize: 10, color: '#555', letterSpacing: '0.12em' }}>SUGGESTED QUERIES</span>
+                    <span style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 11,
+                      color: 'var(--text-tertiary)',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.08em',
+                    }}>
+                      Suggested queries
+                    </span>
                     {SUGGESTED[tab].map((q, i) => (
                       <motion.button
                         key={q}
-                        initial={{ opacity: 0, x: -8 }}
+                        initial={{ opacity: 0, x: -6 }}
                         animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.25 + i * 0.06, duration: 0.3 }}
+                        transition={{ delay: 0.18 + i * 0.05, duration: 0.25 }}
                         onClick={() => { setInput(q); setTimeout(() => inputRef.current?.focus(), 50) }}
-                        style={{ background: 'none', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)', padding: '12px 16px', textAlign: 'left', transition: 'border-color 150ms ease, color 150ms ease' }}
-                        onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border-hover)'; e.currentTarget.style.color = 'var(--text-primary)' }}
-                        onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-default)'; e.currentTarget.style.color = '#AAAAAA' }}
+                        style={{
+                          background: 'transparent',
+                          border: '1px solid var(--border-subtle)',
+                          borderRadius: 'var(--radius-md)',
+                          padding: '11px 14px',
+                          textAlign: 'left',
+                          color: 'var(--text-secondary)',
+                          transition: 'border-color 120ms ease, color 120ms ease, background 120ms ease',
+                          fontSize: 14,
+                          lineHeight: 1.5,
+                        }}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.borderColor = 'var(--border-default)'
+                          e.currentTarget.style.color = 'var(--text-primary)'
+                          e.currentTarget.style.background = 'var(--surface-hover)'
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.borderColor = 'var(--border-subtle)'
+                          e.currentTarget.style.color = 'var(--text-secondary)'
+                          e.currentTarget.style.background = 'transparent'
+                        }}
                       >
-                        <span className="font-narrative" style={{ fontSize: 14, color: 'inherit', lineHeight: 1.5 }}>{q}</span>
+                        {q}
                       </motion.button>
                     ))}
                   </motion.div>
@@ -523,23 +603,38 @@ export default function Agents() {
 
                 {messages.map((msg, i) => (
                   <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 5, alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
-                    <span className="font-system" style={{ fontSize: 9, color: '#555', letterSpacing: '0.12em' }}>
-                      {msg.role === 'user' ? 'YOU' : 'AGENT'}
+                    <span style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 10,
+                      color: 'var(--text-tertiary)',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.08em',
+                    }}>
+                      {msg.role === 'user' ? 'You' : 'Agent'}
                     </span>
                     <div
-                      className="font-narrative"
                       style={{
-                        maxWidth: '88%', padding: '12px 16px', borderRadius: 'var(--radius-md)',
-                        background: msg.role === 'user' ? 'var(--accent-dim)' : 'var(--surface-raised)',
-                        border: `1px solid ${msg.role === 'user' ? 'rgba(255,128,0,0.25)' : 'var(--border-default)'}`,
-                        fontSize: 14, lineHeight: 1.7,
-                        color: msg.role === 'user' ? 'var(--text-primary)' : '#CCCCCC',
+                        maxWidth: '88%',
+                        padding: '11px 14px',
+                        borderRadius: 'var(--radius-md)',
+                        background: msg.role === 'user' ? 'var(--accent-subtle)' : 'var(--surface-raised)',
+                        border: `1px solid ${msg.role === 'user' ? 'rgba(255,128,0,0.25)' : 'var(--border-subtle)'}`,
+                        fontSize: 14,
+                        lineHeight: 1.6,
+                        color: msg.role === 'user' ? 'var(--text-primary)' : 'var(--text-secondary)',
                         whiteSpace: 'pre-wrap',
                       }}
                     >
                       {msg.content}
                       {msg.role === 'assistant' && streaming && i === messages.length - 1 && msg.content === '' && (
-                        <span style={{ display: 'inline-block', width: 7, height: 13, background: 'var(--accent)', marginLeft: 2, animation: 'blink 1s ease-in-out infinite' }} />
+                        <span style={{
+                          display: 'inline-block',
+                          width: 6,
+                          height: 13,
+                          background: 'var(--accent)',
+                          marginLeft: 2,
+                          animation: 'blink 1s ease-in-out infinite',
+                        }} />
                       )}
                     </div>
                   </div>
@@ -550,34 +645,57 @@ export default function Agents() {
               {/* input */}
               <form
                 onSubmit={sendMessage}
-                style={{ padding: '14px 18px', borderTop: '1px solid var(--border-default)', display: 'flex', gap: 10, flexShrink: 0 }}
+                style={{
+                  padding: '12px',
+                  borderTop: '1px solid var(--border-subtle)',
+                  display: 'flex',
+                  gap: 8,
+                  flexShrink: 0,
+                }}
               >
                 <input
                   ref={inputRef}
                   value={input}
                   onChange={e => setInput(e.target.value)}
-                  placeholder={`Query ${tab} agent...`}
+                  placeholder={`Query ${tab} agent…`}
                   disabled={streaming}
-                  className="font-narrative"
-                  style={{ flex: 1, background: 'var(--surface-raised)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)', padding: '11px 16px', fontSize: 14, color: 'var(--text-primary)', outline: 'none', transition: 'border-color 150ms' }}
-                  onFocus={e => (e.target.style.borderColor = 'rgba(255,128,0,0.4)')}
-                  onBlur={e  => (e.target.style.borderColor = 'var(--border-default)')}
+                  style={{
+                    flex: 1,
+                    background: 'var(--surface-raised)',
+                    border: '1px solid var(--border-default)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '9px 14px',
+                    fontSize: 14,
+                    color: 'var(--text-primary)',
+                    outline: 'none',
+                    fontFamily: 'var(--font-sans)',
+                    transition: 'border-color 120ms ease, box-shadow 120ms ease',
+                  }}
+                  onFocus={e => {
+                    e.target.style.borderColor = 'var(--accent)'
+                    e.target.style.boxShadow = '0 0 0 3px var(--accent-ring)'
+                  }}
+                  onBlur={e => {
+                    e.target.style.borderColor = 'var(--border-default)'
+                    e.target.style.boxShadow = 'none'
+                  }}
                 />
                 <button
                   type="submit"
                   disabled={!input.trim() || streaming}
-                  className="font-display"
                   style={{
                     background: input.trim() && !streaming ? 'var(--accent)' : 'var(--surface-raised)',
                     border: `1px solid ${input.trim() && !streaming ? 'var(--accent)' : 'var(--border-default)'}`,
-                    borderRadius: 'var(--radius-md)', padding: '11px 18px',
-                    fontSize: 11, letterSpacing: '0.1em',
-                    color: input.trim() && !streaming ? '#000' : 'var(--text-muted)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '9px 16px',
+                    fontSize: 13,
+                    fontWeight: 500,
+                    color: input.trim() && !streaming ? '#000' : 'var(--text-tertiary)',
                     cursor: input.trim() && !streaming ? 'pointer' : 'default',
-                    transition: 'all 150ms ease',
+                    transition: 'background 120ms ease',
                   }}
                 >
-                  {streaming ? '···' : 'SEND'}
+                  {streaming ? '···' : 'Send'}
                 </button>
               </form>
             </motion.div>
@@ -586,7 +704,63 @@ export default function Agents() {
         </AnimatePresence>
 
       </div>
-      <DockNav />
     </div>
+  )
+}
+
+// ── small composables ────────────────────────────────────────────────────────
+
+function FeedRow({ index, unread, children }: { index: number; unread: boolean; children: React.ReactNode }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: -6 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: index * 0.04, duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+      style={{
+        padding: '14px 20px',
+        borderBottom: '1px solid var(--border-subtle)',
+        borderLeft: unread ? '2px solid var(--accent)' : '2px solid transparent',
+        transition: 'background 120ms',
+      }}
+      onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-hover)')}
+      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+    >
+      {children}
+    </motion.div>
+  )
+}
+
+type PillTone = 'accent' | 'error' | 'neutral' | 'success'
+
+function Pill({ tone, children }: { tone: PillTone; children: React.ReactNode }) {
+  const styles: Record<PillTone, React.CSSProperties> = {
+    accent:  { color: 'var(--accent)',       background: 'var(--accent-subtle)',  border: '1px solid transparent' },
+    error:   { color: 'var(--status-error)', background: 'rgba(248,113,113,0.10)', border: '1px solid transparent' },
+    neutral: { color: 'var(--text-secondary)', background: 'var(--surface-raised)', border: '1px solid var(--border-subtle)' },
+    success: { color: '#10B981',             background: 'rgba(16,185,129,0.10)',  border: '1px solid transparent' },
+  }
+  return (
+    <span style={{
+      fontFamily: 'var(--font-mono)',
+      fontSize: 10,
+      borderRadius: 4,
+      padding: '2px 7px',
+      letterSpacing: '0.02em',
+      ...styles[tone],
+    }}>
+      {children}
+    </span>
+  )
+}
+
+function Meta({ children }: { children: React.ReactNode }) {
+  return (
+    <span style={{
+      fontFamily: 'var(--font-mono)',
+      fontSize: 11,
+      color: 'var(--text-tertiary)',
+    }}>
+      {children}
+    </span>
   )
 }

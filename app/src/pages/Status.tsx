@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
-import { DockNav } from '@/components/ui/dock-nav'
 import { useAgents } from '@/lib/useAgents'
 import type { AgentStatus } from '@/lib/api'
 
@@ -11,10 +10,10 @@ import type { AgentStatus } from '@/lib/api'
    ═══════════════════════════════════════════ */
 
 const STATUS_META: Record<AgentStatus, { label: string; color: string; pulse: boolean }> = {
-  running: { label: 'RUNNING',      color: 'var(--accent)',       pulse: true  },
-  pending: { label: 'PROVISIONING', color: '#00DD77',             pulse: true  },
-  stopped: { label: 'STOPPED',      color: 'var(--text-muted)',   pulse: false },
-  error:   { label: 'ERROR',        color: 'var(--status-error)', pulse: false },
+  running: { label: 'Running',      color: 'var(--status-active)',  pulse: true  },
+  pending: { label: 'Provisioning', color: '#10B981',               pulse: true  },
+  stopped: { label: 'Stopped',      color: 'var(--text-tertiary)',  pulse: false },
+  error:   { label: 'Error',        color: 'var(--status-error)',   pulse: false },
 }
 
 function formatHired(iso: string): string {
@@ -39,35 +38,56 @@ export default function Status() {
   const runningCount = list.filter(a => a.status === 'running').length
 
   return (
-    <div className="dot-grid" style={{ minHeight: '100vh', background: 'var(--black)' }}>
+    <div className="dot-grid" style={{ minHeight: '100vh' }}>
       <div style={{
-        maxWidth: 800,
+        maxWidth: 960,
         margin: '0 auto',
-        padding: '80px 32px 160px',
+        padding: '48px 40px 96px',
         display: 'flex',
         flexDirection: 'column',
-        gap: 48,
+        gap: 32,
       }}>
         {/* Header */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: 0.4 }}
-          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}
+          transition={{ duration: 0.3 }}
+          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}
         >
           <div>
-            <span className="font-display" style={{ fontSize: 10, color: 'var(--accent)', letterSpacing: '0.15em' }}>
-              EMPLOYEE STATUS
-            </span>
-            <h1 className="font-display" style={{ fontSize: 32, color: 'var(--text-primary)', letterSpacing: '0.04em', marginTop: 8 }}>
-              WORKFORCE
+            <h1 style={{
+              fontSize: 26,
+              fontWeight: 600,
+              color: 'var(--text-primary)',
+              letterSpacing: '-0.01em',
+            }}>
+              Workforce
             </h1>
+            <p style={{
+              marginTop: 6,
+              fontSize: 14,
+              color: 'var(--text-secondary)',
+            }}>
+              Health of every AI employee you&rsquo;ve hired.
+            </p>
           </div>
           <div style={{ textAlign: 'right' }}>
-            <div className="font-display" style={{ fontSize: 28, color: 'var(--accent)' }}>{clock}</div>
+            <div style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 13,
+              color: 'var(--text-tertiary)',
+              letterSpacing: '0.02em',
+            }}>
+              {clock}
+            </div>
             {!loading && !error && (
-              <div className="font-system" style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2, letterSpacing: '0.08em' }}>
-                {runningCount} / {list.length} RUNNING
+              <div style={{
+                marginTop: 4,
+                fontSize: 12,
+                color: 'var(--text-secondary)',
+              }}>
+                <span style={{ color: 'var(--accent)', fontWeight: 500 }}>{runningCount}</span>
+                {' '}of {list.length} running
               </div>
             )}
           </div>
@@ -75,25 +95,32 @@ export default function Status() {
 
         {/* Roster */}
         <motion.div
-          initial={{ opacity: 0, y: 16 }}
+          initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1, duration: 0.4 }}
+          transition={{ delay: 0.08, duration: 0.3 }}
           style={{
             background: 'var(--surface)',
             borderRadius: 'var(--radius-lg)',
-            border: '1px solid var(--border-default)',
+            border: '1px solid var(--border-subtle)',
             overflow: 'hidden',
           }}
         >
           {/* Column headers */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: '1fr 130px 110px',
-            padding: '14px 24px',
-            borderBottom: '1px solid var(--border-default)',
+            gridTemplateColumns: '1fr 160px 120px',
+            padding: '12px 20px',
+            borderBottom: '1px solid var(--border-subtle)',
+            background: 'var(--surface)',
           }}>
-            {['EMPLOYEE', 'STATUS', 'HIRED'].map(h => (
-              <span key={h} className="font-system" style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>
+            {['Employee', 'Status', 'Hired'].map(h => (
+              <span key={h} style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 11,
+                color: 'var(--text-tertiary)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.08em',
+              }}>
                 {h}
               </span>
             ))}
@@ -102,36 +129,39 @@ export default function Status() {
           {loading && [0, 1].map(i => (
             <div key={`sk-${i}`} style={{
               display: 'grid',
-              gridTemplateColumns: '1fr 130px 110px',
-              padding: '18px 24px',
+              gridTemplateColumns: '1fr 160px 120px',
+              padding: '16px 20px',
               alignItems: 'center',
-              borderBottom: i < 1 ? '1px solid var(--border-default)' : 'none',
+              borderBottom: i < 1 ? '1px solid var(--border-subtle)' : 'none',
             }}>
-              <div style={{ height: 12, width: 160, background: 'var(--border-default)', borderRadius: 3, opacity: 0.4 }} />
-              <div style={{ height: 12, width: 70, background: 'var(--border-default)', borderRadius: 3, opacity: 0.4 }} />
-              <div style={{ height: 12, width: 60, background: 'var(--border-default)', borderRadius: 3, opacity: 0.4 }} />
+              <div style={{ height: 12, width: 160, background: 'var(--border-default)', borderRadius: 3, opacity: 0.5 }} />
+              <div style={{ height: 12, width: 70, background: 'var(--border-default)', borderRadius: 3, opacity: 0.5 }} />
+              <div style={{ height: 12, width: 60, background: 'var(--border-default)', borderRadius: 3, opacity: 0.5 }} />
             </div>
           ))}
 
           {error && (
-            <div style={{ padding: '18px 24px' }}>
-              <span className="font-system" style={{ fontSize: 12, color: 'var(--status-error)' }}>
-                Couldn’t load your workforce. {error}
+            <div style={{ padding: '16px 20px' }}>
+              <span style={{ fontSize: 13, color: 'var(--status-error)' }}>
+                Couldn&rsquo;t load your workforce. {error}
               </span>
             </div>
           )}
 
           {!loading && !error && list.length === 0 && (
-            <div style={{ padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <span className="font-narrative" style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
-                You haven’t hired any employees yet.
+            <div style={{ padding: '32px 20px', display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-start' }}>
+              <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
+                You haven&rsquo;t hired any employees yet.
               </span>
               <Link
                 to="/directory"
-                className="font-display"
-                style={{ fontSize: 11, color: 'var(--accent)', letterSpacing: '0.1em' }}
+                style={{
+                  fontSize: 13,
+                  color: 'var(--accent)',
+                  fontWeight: 500,
+                }}
               >
-                BROWSE THE TALENT DIRECTORY →
+                Browse the talent directory →
               </Link>
             </div>
           )}
@@ -141,22 +171,31 @@ export default function Status() {
             return (
               <motion.div
                 key={agent.id}
-                initial={{ opacity: 0, x: -12 }}
+                initial={{ opacity: 0, x: -8 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.15 + i * 0.06, duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                transition={{ delay: 0.12 + i * 0.04, duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: '1fr 130px 110px',
-                  padding: '18px 24px',
+                  gridTemplateColumns: '1fr 160px 120px',
+                  padding: '16px 20px',
                   alignItems: 'center',
-                  borderBottom: i < list.length - 1 ? '1px solid var(--border-default)' : 'none',
+                  borderBottom: i < list.length - 1 ? '1px solid var(--border-subtle)' : 'none',
                 }}
               >
                 <div>
-                  <div className="font-display" style={{ fontSize: 13, color: 'var(--text-primary)', letterSpacing: '0.03em' }}>
+                  <div style={{
+                    fontSize: 14,
+                    fontWeight: 500,
+                    color: 'var(--text-primary)',
+                  }}>
                     {agent.role}
                   </div>
-                  <div className="font-system" style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                  <div style={{
+                    marginTop: 3,
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 11,
+                    color: 'var(--text-tertiary)',
+                  }}>
                     {agent.container_id ? agent.container_id.slice(0, 12) : 'no container'}
                   </div>
                 </div>
@@ -165,11 +204,19 @@ export default function Status() {
                     width: 6, height: 6, borderRadius: '50%', background: meta.color,
                     ...(meta.pulse ? { animation: 'pulse-status 1.5s ease-in-out infinite' } : {}),
                   }} />
-                  <span className="font-system" style={{ fontSize: 11, color: meta.color, letterSpacing: '0.06em', fontWeight: 500 }}>
+                  <span style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 12,
+                    color: meta.color,
+                    fontWeight: 500,
+                  }}>
                     {meta.label}
                   </span>
                 </div>
-                <span className="font-system" style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                <span style={{
+                  fontSize: 13,
+                  color: 'var(--text-secondary)',
+                }}>
                   {formatHired(agent.created_at)}
                 </span>
               </motion.div>
@@ -177,8 +224,6 @@ export default function Status() {
           })}
         </motion.div>
       </div>
-
-      <DockNav />
     </div>
   )
 }

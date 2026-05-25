@@ -28,7 +28,7 @@ export class ErrorBoundary extends Component<Props, State> {
         className="dot-grid"
         style={{
           minHeight: '100vh',
-          background: 'var(--black)',
+          background: 'var(--background)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -37,40 +37,47 @@ export class ErrorBoundary extends Component<Props, State> {
       >
         <div
           style={{
-            maxWidth: 440,
+            maxWidth: 420,
             background: 'var(--surface)',
-            border: '1px solid var(--border-default)',
+            border: '1px solid var(--border-subtle)',
             borderRadius: 'var(--radius-lg)',
-            padding: 32,
+            padding: 28,
             display: 'flex',
             flexDirection: 'column',
-            gap: 16,
+            gap: 12,
           }}
         >
-          <span className="font-display" style={{ fontSize: 11, color: 'var(--status-error)', letterSpacing: '0.15em' }}>
-            SYSTEM FAULT
+          <span style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 11,
+            color: 'var(--status-error)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.08em',
+          }}>
+            System fault
           </span>
-          <h1 className="font-display" style={{ fontSize: 22, color: 'var(--text-primary)', letterSpacing: '0.04em' }}>
-            SOMETHING BROKE
+          <h1 style={{ fontSize: 22, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+            Something broke
           </h1>
-          <p className="font-narrative" style={{ fontSize: 14, color: '#AAAAAA', lineHeight: 1.6 }}>
+          <p style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.55 }}>
             An unexpected error stopped this view from rendering. Reloading usually clears it.
           </p>
           <button
             onClick={() => window.location.reload()}
-            className="font-display"
             style={{
-              padding: '12px 24px',
+              alignSelf: 'flex-start',
+              padding: '10px 18px',
               background: 'var(--accent)',
               color: '#000',
               borderRadius: 'var(--radius-md)',
-              fontSize: 11,
-              letterSpacing: '0.1em',
+              fontSize: 14,
+              fontWeight: 500,
               border: 'none',
               cursor: 'pointer',
+              marginTop: 4,
             }}
           >
-            RELOAD
+            Reload
           </button>
         </div>
       </div>
