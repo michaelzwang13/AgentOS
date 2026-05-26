@@ -523,8 +523,8 @@ export default function Agents() {
                   ) : (
                     <button
                       onClick={handleDisconnect}
-                      style={{ fontSize: 12, color: 'var(--text-tertiary)' }}
-                      onMouseEnter={e => (e.currentTarget.style.color = 'var(--text-primary)')}
+                      style={{ fontSize: 12, color: 'var(--text-tertiary)', transition: 'color 120ms ease' }}
+                      onMouseEnter={e => (e.currentTarget.style.color = 'var(--status-error)')}
                       onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-tertiary)')}
                     >
                       Disconnect
