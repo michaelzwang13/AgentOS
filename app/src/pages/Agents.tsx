@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Components } from 'react-markdown'
+import { Layers, GitPullRequest, CircleDot, AtSign, Workflow, MoreHorizontal } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import {
   isLoggedIn,
   fetchSlackMessages,
@@ -35,13 +37,13 @@ interface ChatMsg { role: 'user' | 'assistant'; content: string }
 type Tab = 'slack' | 'gmail' | 'github'
 type GhFilter = 'all' | GhCategory
 
-const GH_FILTERS: { id: GhFilter; label: string }[] = [
-  { id: 'all',     label: 'All' },
-  { id: 'pr',      label: 'PRs' },
-  { id: 'issue',   label: 'Issues' },
-  { id: 'mention', label: 'Mentions' },
-  { id: 'ci',      label: 'CI' },
-  { id: 'other',   label: 'Other' },
+const GH_FILTERS: { id: GhFilter; label: string; icon: LucideIcon }[] = [
+  { id: 'all',     label: 'All',      icon: Layers },
+  { id: 'pr',      label: 'PRs',      icon: GitPullRequest },
+  { id: 'issue',   label: 'Issues',   icon: CircleDot },
+  { id: 'mention', label: 'Mentions', icon: AtSign },
+  { id: 'ci',      label: 'CI',       icon: Workflow },
+  { id: 'other',   label: 'Other',    icon: MoreHorizontal },
 ]
 
 // Markdown overrides for assistant chat bubbles. Defined at module scope so
@@ -609,7 +611,7 @@ export default function Agents() {
                         <FeedRow key={item.id} index={i} unread={item.unread}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <Pill tone={item.type === 'PR' ? 'success' : 'neutral'}>{item.type}</Pill>
+                              <TypeBadge category={item.category} typeLabel={item.type} />
                               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent)' }}>{item.repo}</span>
                               {item.state === 'draft' && <Pill tone="neutral">Draft</Pill>}
                             </div>
@@ -931,48 +933,16 @@ function GhFilterBar({ category, repo, counts, repos, onCategory, onRepo }: {
       }}
     >
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        {GH_FILTERS.map(f => {
-          const active = category === f.id
-          return (
-            <button
-              key={f.id}
-              onClick={() => onCategory(f.id)}
-              style={{
-                fontSize: 12,
-                fontFamily: 'var(--font-sans)',
-                padding: '4px 10px',
-                borderRadius: 'var(--radius-pill)',
-                border: active ? '1px solid var(--accent-ring)' : '1px solid var(--border-subtle)',
-                background: active ? 'var(--accent-subtle)' : 'transparent',
-                color: active ? 'var(--accent)' : 'var(--text-tertiary)',
-                cursor: 'pointer',
-                transition: 'color 120ms ease, background 120ms ease, border-color 120ms ease',
-              }}
-              onMouseEnter={e => {
-                if (!active) {
-                  e.currentTarget.style.color = 'var(--text-primary)'
-                  e.currentTarget.style.borderColor = 'var(--border-default)'
-                }
-              }}
-              onMouseLeave={e => {
-                if (!active) {
-                  e.currentTarget.style.color = 'var(--text-tertiary)'
-                  e.currentTarget.style.borderColor = 'var(--border-subtle)'
-                }
-              }}
-            >
-              {f.label}
-              <span style={{
-                marginLeft: 6,
-                fontFamily: 'var(--font-mono)',
-                fontSize: 10,
-                color: active ? 'var(--accent)' : 'var(--text-disabled)',
-              }}>
-                {counts[f.id]}
-              </span>
-            </button>
-          )
-        })}
+        {GH_FILTERS.map(f => (
+          <FilterPill
+            key={f.id}
+            label={f.label}
+            icon={f.icon}
+            count={counts[f.id]}
+            active={category === f.id}
+            onClick={() => onCategory(f.id)}
+          />
+        ))}
       </div>
       {repos.length > 0 && (
         <select
@@ -995,5 +965,137 @@ function GhFilterBar({ category, repo, counts, repos, onCategory, onRepo }: {
         </select>
       )}
     </motion.div>
+  )
+}
+
+function FilterPill({ label, icon: Icon, count, active, onClick }: {
+  label: string
+  icon: LucideIcon
+  count: number
+  active: boolean
+  onClick: () => void
+}) {
+  const [hover, setHover] = useState(false)
+  return (
+    <div style={{ position: 'relative' }}>
+      <button
+        onClick={onClick}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        aria-label={label}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '5px 10px',
+          borderRadius: 'var(--radius-pill)',
+          border: active ? '1px solid var(--accent-ring)' : '1px solid var(--border-subtle)',
+          background: active ? 'var(--accent-subtle)' : hover ? 'var(--surface-hover)' : 'transparent',
+          color: active ? 'var(--accent)' : hover ? 'var(--text-primary)' : 'var(--text-tertiary)',
+          cursor: 'pointer',
+          transition: 'color 120ms ease, background 120ms ease, border-color 120ms ease',
+        }}
+      >
+        <Icon size={13} strokeWidth={2} />
+        <span style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: 10,
+          color: active ? 'var(--accent)' : 'var(--text-disabled)',
+          lineHeight: 1,
+        }}>
+          {count}
+        </span>
+      </button>
+      {hover && (
+        <div
+          role="tooltip"
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 6px)',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            padding: '4px 8px',
+            fontSize: 11,
+            fontFamily: 'var(--font-mono)',
+            color: 'var(--text-primary)',
+            background: 'var(--surface-raised)',
+            border: '1px solid var(--border-default)',
+            borderRadius: 'var(--radius-sm)',
+            whiteSpace: 'nowrap',
+            pointerEvents: 'none',
+            zIndex: 10,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+          }}
+        >
+          {label}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Driven by item.category so a 'mention'-bucket PR shows the AtSign even
+// though item.type is still 'PR'. Tooltip = the raw GitHub type string so
+// the precision info ('CheckSuite', 'RepositoryInvitation') survives.
+const TYPE_BADGE_STYLE: Record<GhCategory, { icon: LucideIcon; tone: PillTone }> = {
+  pr:      { icon: GitPullRequest,  tone: 'success' },
+  issue:   { icon: CircleDot,       tone: 'neutral' },
+  mention: { icon: AtSign,          tone: 'accent'  },
+  ci:      { icon: Workflow,        tone: 'neutral' },
+  other:   { icon: MoreHorizontal,  tone: 'neutral' },
+}
+const TYPE_BADGE_BG: Record<PillTone, React.CSSProperties> = {
+  accent:  { color: 'var(--accent)',         background: 'var(--accent-subtle)',     border: '1px solid transparent' },
+  error:   { color: 'var(--status-error)',   background: 'rgba(248,113,113,0.10)',   border: '1px solid transparent' },
+  neutral: { color: 'var(--text-secondary)', background: 'var(--surface-raised)',    border: '1px solid var(--border-subtle)' },
+  success: { color: '#10B981',               background: 'rgba(16,185,129,0.10)',    border: '1px solid transparent' },
+}
+
+function TypeBadge({ category, typeLabel }: { category?: GhCategory; typeLabel: string }) {
+  const { icon: Icon, tone } = TYPE_BADGE_STYLE[category ?? 'other']
+  const [hover, setHover] = useState(false)
+  return (
+    <div style={{ position: 'relative', display: 'inline-flex' }}>
+      <span
+        aria-label={typeLabel}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 22,
+          height: 18,
+          borderRadius: 4,
+          ...TYPE_BADGE_BG[tone],
+        }}
+      >
+        <Icon size={11} strokeWidth={2.2} />
+      </span>
+      {hover && (
+        <div
+          role="tooltip"
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 6px)',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            padding: '4px 8px',
+            fontSize: 11,
+            fontFamily: 'var(--font-mono)',
+            color: 'var(--text-primary)',
+            background: 'var(--surface-raised)',
+            border: '1px solid var(--border-default)',
+            borderRadius: 'var(--radius-sm)',
+            whiteSpace: 'nowrap',
+            pointerEvents: 'none',
+            zIndex: 10,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+          }}
+        >
+          {typeLabel}
+        </div>
+      )}
+    </div>
   )
 }
