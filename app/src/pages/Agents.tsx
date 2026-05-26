@@ -181,16 +181,20 @@ export default function Agents() {
     ]).finally(() => setFeedLoading(false))
   }, [])
 
-  // OAuth redirect params
+  // OAuth redirect params — also flip the active tab to whichever tool the
+  // user just connected, so they land on its feed instead of the Slack default.
   useEffect(() => {
     const p = new URLSearchParams(window.location.search)
     if (p.get('connected') === 'true' || p.get('connected') === 'slack') {
+      setTab('slack')
       fetchSlackMessages().then(d => { if (d.connected) { setSlackConn(true); setSlackData(d.messages) } })
     }
     if (p.get('gmail_connected')) {
+      setTab('gmail')
       fetchGmailMessages().then(d => { if (d.connected) { setGmailConn(true); setGmailData(d.emails) } })
     }
     if (p.get('github_connected')) {
+      setTab('github')
       fetchGithubActivity().then(d => { if (d.connected) { setGithubConn(true); setGithubData(d.items) } })
     }
     if (p.toString()) window.history.replaceState({}, '', '/agents')
