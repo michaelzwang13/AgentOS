@@ -1,7 +1,10 @@
 @import "tailwindcss";
 
 /* ═══════════════════════════════════════════════════════════
-   RETRO-FUTURIST SIGNAL — Design System (Minimal Edition)
+   AgentOS — Design System
+   Minimalist + techno. Black canvas, orange accents.
+   Inter (sans) for body, JetBrains Mono for metadata,
+   DotMatrix reserved for the brand wordmark only.
    ═══════════════════════════════════════════════════════════ */
 
 /* ── Font Faces ── */
@@ -15,59 +18,59 @@
 
 /* ── Design Tokens ── */
 :root {
-  /* Surfaces */
-  --black: #000000;
-  --surface: #111111;
-  --surface-raised: #1A1A1A;
-  --surface-overlay: #0A0A0A;
+  /* Surfaces — slightly cooler/deeper for clearer elevation hierarchy */
+  --background:        #000000;
+  --surface:           #0A0A0A;
+  --surface-raised:    #141414;
+  --surface-hover:     #1C1C1C;
 
-  /* Borders */
-  --border-default: #222222;
-  --border-hover: #555555;
-  --border-active: #FF8000;
-  --border-complete: #FFFFFF;
+  /* Borders — softer subtle dividers, stronger only at focused states */
+  --border-subtle:     #1F1F1F;
+  --border-default:    #2A2A2A;
+  --border-strong:     #3F3F3F;
 
-  /* Accent */
-  --accent: #FF8000;
-  --accent-dim: rgba(255, 128, 0, 0.12);
-  --accent-glow: rgba(255, 128, 0, 0.3);
+  /* Text — every step at least WCAG AA against #000 */
+  --text-primary:      #FAFAFA;  /* ~20:1 — body + headings */
+  --text-secondary:    #A1A1AA;  /* zinc-400, ~9:1 — labels + supporting */
+  --text-tertiary:     #71717A;  /* zinc-500, ~5:1 — metadata, IDs, counts */
+  --text-disabled:     #52525B;  /* zinc-600, ~3.5:1 — non-essential hints */
 
-  /* Text */
-  --text-primary: #FFFFFF;
-  --text-secondary: #888888;
-  --text-muted: #4A4A4A;
-  --text-ghost: #2A2A2A;
+  /* Accent — orange used like Supabase uses green: CTA + active only */
+  --accent:            #FF8000;
+  --accent-hover:      #FF9933;
+  --accent-subtle:     rgba(255, 128, 0, 0.10);
+  --accent-ring:       rgba(255, 128, 0, 0.35);
 
   /* Status */
-  --status-active: #FF8000;
-  --status-complete: #FFFFFF;
-  --status-error: #FF4444;
-  --status-idle: #333333;
+  --status-active:     #FF8000;
+  --status-complete:   #FAFAFA;
+  --status-error:      #F87171;
+  --status-idle:       #3F3F3F;
 
   /* Typography */
-  --font-display: 'DotMatrix', monospace;
-  --font-narrative: 'Courier Prime', 'Courier New', monospace;
-  --font-system: 'JetBrains Mono', ui-monospace, monospace;
+  --font-sans:         'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono:         'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+  --font-display:      'DotMatrix', monospace;  /* wordmark only */
 
-  /* Grid */
-  --grid-size: 24px;
-  --dot-opacity: 0.04;
+  /* Layout */
+  --sidebar-width:     240px;
+  --grid-size:         24px;
+  --dot-opacity:       0.04;
 
-  /* Radii */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 20px;
-  --radius-pill: 999px;
+  /* Radii — slightly tighter, Supabase-style */
+  --radius-sm:         6px;
+  --radius-md:         8px;
+  --radius-lg:         10px;
+  --radius-xl:         12px;
+  --radius-pill:       999px;
 
-  /* Shadcn-compatible tokens */
-  --background: var(--black);
-  --foreground: var(--text-primary);
-  --popover: var(--surface-raised);
+  /* Shadcn-compatible aliases */
+  --foreground:        var(--text-primary);
+  --popover:           var(--surface-raised);
   --popover-foreground: var(--text-primary);
-  --secondary: var(--surface);
+  --secondary:         var(--surface);
   --secondary-foreground: var(--text-primary);
-  --border: var(--border-default);
+  --border:            var(--border-default);
 }
 
 /* ── Global Reset ── */
@@ -85,14 +88,15 @@ html {
 }
 
 body {
-  font-family: var(--font-system);
+  font-family: var(--font-sans);
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';  /* Inter stylistic alts */
   color: var(--text-primary);
-  background: var(--black);
+  background: var(--background);
   min-height: 100vh;
   overflow-x: hidden;
 }
 
-/* ── Dot Grid Texture ── */
+/* ── Dot Grid Texture — kept as the techno background hint ── */
 .dot-grid {
   background-image: radial-gradient(circle, rgba(255, 255, 255, var(--dot-opacity)) 1px, transparent 1px);
   background-size: var(--grid-size) var(--grid-size);
@@ -105,14 +109,12 @@ body {
   text-transform: uppercase;
 }
 
-.font-narrative {
-  font-family: var(--font-narrative);
-  line-height: 1.6;
+.font-sans {
+  font-family: var(--font-sans);
 }
 
-.font-system {
-  font-family: var(--font-system);
-  font-weight: 400;
+.font-mono {
+  font-family: var(--font-mono);
 }
 
 /* ── Status indicators ── */
@@ -154,8 +156,8 @@ body {
 
 /* ── Scrollbar ── */
 ::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
@@ -164,10 +166,13 @@ body {
   background: var(--border-default);
   border-radius: var(--radius-pill);
 }
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-strong);
+}
 
 /* ── Selection ── */
 ::selection {
-  background: var(--accent-dim);
+  background: var(--accent-subtle);
   color: var(--text-primary);
 }
 
@@ -184,4 +189,11 @@ button {
   cursor: pointer;
   font-family: inherit;
   color: inherit;
+}
+
+/* ── Focus ring — accessible orange halo on interactive elements ── */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
 }

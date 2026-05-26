@@ -13,7 +13,7 @@ describe('Login', () => {
 
   it('renders the signup form with a password field', () => {
     renderLogin()
-    expect(screen.getByRole('heading', { name: 'SIGN UP' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Create your account' })).toBeInTheDocument()
     expect(screen.getByPlaceholderText('At least 8 characters')).toBeInTheDocument()
   })
 
@@ -28,7 +28,7 @@ describe('Login', () => {
     const user = userEvent.setup()
     renderLogin()
 
-    const submit = screen.getByRole('button', { name: 'GET STARTED' })
+    const submit = screen.getByRole('button', { name: 'Get started' })
     expect(submit).toBeDisabled()
 
     await user.type(screen.getByPlaceholderText('Your name'), 'Ada')

@@ -16,8 +16,8 @@ describe('ErrorBoundary', () => {
     // React logs the caught render error — silence it for a clean run.
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     render(<ErrorBoundary><Boom /></ErrorBoundary>)
-    expect(screen.getByText('SOMETHING BROKE')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'RELOAD' })).toBeInTheDocument()
+    expect(screen.getByText('Something broke')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Reload' })).toBeInTheDocument()
     consoleError.mockRestore()
   })
 })

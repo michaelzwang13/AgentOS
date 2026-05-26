@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { DockNav } from '@/components/ui/dock-nav'
 import { signup, login, isLoggedIn, getStoredUser, logout } from '@/lib/api'
 
 type Mode = 'signup' | 'login'
@@ -18,38 +17,42 @@ export default function Login() {
 
   if (isLoggedIn() && user) {
     return (
-      <div className="dot-grid" style={{ minHeight: '100vh', background: 'var(--black)' }}>
-        <div style={{ maxWidth: 480, margin: '0 auto', padding: '120px 32px 160px', display: 'flex', flexDirection: 'column', gap: 32 }}>
-          <span className="font-display" style={{ fontSize: 11, color: 'var(--accent)', letterSpacing: '0.15em' }}>OPENCLAW</span>
-          <h1 className="font-display" style={{ fontSize: 28, color: 'var(--text-primary)', letterSpacing: '0.04em' }}>
-            SIGNED IN
-          </h1>
-          <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-default)', padding: 24 }}>
-            <div className="font-narrative" style={{ fontSize: 14, color: '#AAAAAA', marginBottom: 8 }}>
-              {user.name} ({user.email})
+      <div className="dot-grid" style={{ minHeight: '100vh', background: 'var(--background)' }}>
+        <div style={{ maxWidth: 460, margin: '0 auto', padding: '120px 32px 96px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+          <Wordmark />
+          <div>
+            <h1 style={{ fontSize: 26, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+              Welcome back
+            </h1>
+            <p style={{ marginTop: 6, fontSize: 14, color: 'var(--text-secondary)' }}>
+              You&rsquo;re already signed in.
+            </p>
+          </div>
+          <div style={{
+            background: 'var(--surface)',
+            borderRadius: 'var(--radius-lg)',
+            border: '1px solid var(--border-subtle)',
+            padding: 18,
+          }}>
+            <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)' }}>
+              {user.name}
             </div>
-            <div className="font-system" style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-              API Key: {localStorage.getItem('openclaw_api_key')?.slice(0, 12)}...
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>
+              {user.email}
+            </div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-disabled)', marginTop: 10 }}>
+              API key {localStorage.getItem('openclaw_api_key')?.slice(0, 12)}…
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 12 }}>
-            <button
-              onClick={() => navigate('/agents')}
-              className="font-display"
-              style={{ padding: '12px 24px', background: 'var(--accent)', color: '#000', borderRadius: 'var(--radius-md)', fontSize: 11, letterSpacing: '0.1em' }}
-            >
-              OPEN AGENT OPS
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button onClick={() => navigate('/agents')} style={primaryBtn}>
+              Open workspace
             </button>
-            <button
-              onClick={() => { logout(); window.location.reload() }}
-              className="font-display"
-              style={{ padding: '12px 24px', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)', fontSize: 11, letterSpacing: '0.1em', color: 'var(--text-muted)' }}
-            >
-              SIGN OUT
+            <button onClick={() => { logout(); window.location.reload() }} style={ghostBtn}>
+              Sign out
             </button>
           </div>
         </div>
-        <DockNav />
       </div>
     )
   }
@@ -79,43 +82,40 @@ export default function Login() {
   }
 
   return (
-    <div className="dot-grid" style={{ minHeight: '100vh', background: 'var(--black)' }}>
-      <div style={{ maxWidth: 480, margin: '0 auto', padding: '120px 32px 160px', display: 'flex', flexDirection: 'column', gap: 32 }}>
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }}>
-          <span className="font-display" style={{ fontSize: 11, color: 'var(--accent)', letterSpacing: '0.15em' }}>
-            OPENCLAW
-          </span>
-          <h1 className="font-display" style={{ fontSize: 28, color: 'var(--text-primary)', letterSpacing: '0.04em', marginTop: 12 }}>
-            {mode === 'signup' ? 'SIGN UP' : 'LOG IN'}
+    <div className="dot-grid" style={{ minHeight: '100vh', background: 'var(--background)' }}>
+      <div style={{ maxWidth: 420, margin: '0 auto', padding: '96px 32px', display: 'flex', flexDirection: 'column', gap: 28 }}>
+        <Wordmark />
+
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
+          <h1 style={{ fontSize: 28, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+            {mode === 'signup' ? 'Create your account' : 'Sign in'}
           </h1>
-          <p className="font-narrative" style={{ fontSize: 14, color: '#AAAAAA', marginTop: 8, lineHeight: 1.6 }}>
+          <p style={{ marginTop: 8, fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.55 }}>
             {mode === 'signup'
-              ? 'Create an account to hire AI employees and connect your tools.'
-              : 'Sign in with your email and password.'}
+              ? 'Hire AI employees and connect them to your tools.'
+              : 'Welcome back to AgentOS.'}
           </p>
         </motion.div>
 
         {/* Mode toggle */}
-        <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border-default)' }}>
+        <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid var(--border-subtle)' }}>
           {(['signup', 'login'] as Mode[]).map(m => {
             const active = mode === m
             return (
               <button
                 key={m}
                 onClick={() => { setMode(m); setError(''); setPassword('') }}
-                className="font-display"
                 style={{
-                  background: 'none',
-                  padding: '10px 22px',
+                  padding: '10px 16px',
                   marginBottom: -1,
                   borderBottom: active ? '2px solid var(--accent)' : '2px solid transparent',
-                  color: active ? 'var(--accent)' : 'var(--text-muted)',
-                  fontSize: 11,
-                  letterSpacing: '0.12em',
-                  transition: 'color 150ms ease',
+                  color: active ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                  fontSize: 13,
+                  fontWeight: active ? 500 : 400,
+                  transition: 'color 150ms ease, border-color 150ms ease',
                 }}
               >
-                {m === 'signup' ? 'SIGN UP' : 'LOG IN'}
+                {m === 'signup' ? 'Sign up' : 'Sign in'}
               </button>
             )
           })}
@@ -124,78 +124,154 @@ export default function Login() {
         <motion.form
           key={mode}
           onSubmit={handleSubmit}
-          initial={{ opacity: 0, y: 12 }}
+          initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.05, duration: 0.3 }}
-          style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+          transition={{ duration: 0.2 }}
+          style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
         >
           {mode === 'signup' && (
-            <div>
-              <label className="font-system" style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: '0.1em', display: 'block', marginBottom: 6 }}>NAME</label>
+            <Field label="Name">
               <input
                 value={name}
                 onChange={e => setName(e.target.value)}
                 placeholder="Your name"
-                className="font-narrative"
-                style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)', padding: '12px 16px', fontSize: 14, color: 'var(--text-primary)', outline: 'none' }}
-                onFocus={e => (e.target.style.borderColor = 'rgba(255,128,0,0.4)')}
-                onBlur={e  => (e.target.style.borderColor = 'var(--border-default)')}
+                style={inputStyle}
+                onFocus={focusInput}
+                onBlur={blurInput}
               />
-            </div>
+            </Field>
           )}
-          <div>
-            <label className="font-system" style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: '0.1em', display: 'block', marginBottom: 6 }}>EMAIL</label>
+          <Field label="Email">
             <input
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
               placeholder="you@company.com"
-              className="font-narrative"
               autoFocus
-              style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)', padding: '12px 16px', fontSize: 14, color: 'var(--text-primary)', outline: 'none' }}
-              onFocus={e => (e.target.style.borderColor = 'rgba(255,128,0,0.4)')}
-              onBlur={e  => (e.target.style.borderColor = 'var(--border-default)')}
+              style={inputStyle}
+              onFocus={focusInput}
+              onBlur={blurInput}
             />
-          </div>
-          <div>
-            <label className="font-system" style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: '0.1em', display: 'block', marginBottom: 6 }}>PASSWORD</label>
+          </Field>
+          <Field label="Password">
             <input
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
               placeholder={mode === 'signup' ? 'At least 8 characters' : 'Your password'}
               autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-              className="font-narrative"
-              style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)', padding: '12px 16px', fontSize: 14, color: 'var(--text-primary)', outline: 'none' }}
-              onFocus={e => (e.target.style.borderColor = 'rgba(255,128,0,0.4)')}
-              onBlur={e  => (e.target.style.borderColor = 'var(--border-default)')}
+              style={inputStyle}
+              onFocus={focusInput}
+              onBlur={blurInput}
             />
             {mode === 'signup' && password.length > 0 && !passwordValid && (
-              <p className="font-system" style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 6 }}>
+              <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 6 }}>
                 Password must be at least 8 characters.
               </p>
             )}
-          </div>
-          {error && <p className="font-system" style={{ fontSize: 12, color: 'var(--status-error)' }}>{error}</p>}
+          </Field>
+          {error && <p style={{ fontSize: 13, color: 'var(--status-error)' }}>{error}</p>}
           <button
             type="submit"
             disabled={loading || !canSubmit}
-            className="font-display"
             style={{
-              padding: '14px 24px', marginTop: 8,
-              background: !loading && canSubmit ? 'var(--accent)' : 'var(--surface-raised)',
-              color: !loading && canSubmit ? '#000' : 'var(--text-muted)',
-              borderRadius: 'var(--radius-md)', fontSize: 12, letterSpacing: '0.1em',
-              transition: 'all 150ms ease',
+              ...primaryBtn,
+              marginTop: 8,
+              opacity: !loading && canSubmit ? 1 : 0.55,
+              cursor: !loading && canSubmit ? 'pointer' : 'not-allowed',
             }}
           >
             {loading
-              ? (mode === 'signup' ? 'CREATING...' : 'LOGGING IN...')
-              : (mode === 'signup' ? 'GET STARTED' : 'LOG IN')}
+              ? (mode === 'signup' ? 'Creating account…' : 'Signing in…')
+              : (mode === 'signup' ? 'Get started' : 'Sign in')}
           </button>
         </motion.form>
       </div>
-      <DockNav />
     </div>
   )
+}
+
+// ── small composables ────────────────────────────────────────────────────────
+
+function Wordmark() {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <span
+        aria-hidden
+        style={{
+          width: 9,
+          height: 9,
+          borderRadius: '50%',
+          background: 'var(--accent)',
+          boxShadow: '0 0 12px var(--accent-ring)',
+        }}
+      />
+      <span
+        className="font-display"
+        style={{ fontSize: 20, color: 'var(--text-primary)', letterSpacing: '0.08em' }}
+      >
+        AgentOS
+      </span>
+    </div>
+  )
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label style={{
+        display: 'block',
+        marginBottom: 6,
+        fontSize: 13,
+        color: 'var(--text-secondary)',
+        fontWeight: 500,
+      }}>
+        {label}
+      </label>
+      {children}
+    </div>
+  )
+}
+
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  background: 'var(--surface)',
+  border: '1px solid var(--border-default)',
+  borderRadius: 'var(--radius-md)',
+  padding: '10px 14px',
+  fontSize: 14,
+  color: 'var(--text-primary)',
+  outline: 'none',
+  fontFamily: 'var(--font-sans)',
+  transition: 'border-color 120ms ease, box-shadow 120ms ease',
+}
+
+const focusInput = (e: React.FocusEvent<HTMLInputElement>) => {
+  e.target.style.borderColor = 'var(--accent)'
+  e.target.style.boxShadow = '0 0 0 3px var(--accent-ring)'
+}
+const blurInput = (e: React.FocusEvent<HTMLInputElement>) => {
+  e.target.style.borderColor = 'var(--border-default)'
+  e.target.style.boxShadow = 'none'
+}
+
+const primaryBtn: React.CSSProperties = {
+  padding: '10px 18px',
+  background: 'var(--accent)',
+  color: '#000',
+  borderRadius: 'var(--radius-md)',
+  fontSize: 14,
+  fontWeight: 500,
+  transition: 'background 120ms ease',
+}
+
+const ghostBtn: React.CSSProperties = {
+  padding: '10px 18px',
+  background: 'transparent',
+  color: 'var(--text-primary)',
+  border: '1px solid var(--border-default)',
+  borderRadius: 'var(--radius-md)',
+  fontSize: 14,
+  fontWeight: 500,
+  transition: 'background 120ms ease, border-color 120ms ease',
 }
