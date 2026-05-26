@@ -1,5 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import type { Components } from 'react-markdown'
 import {
   isLoggedIn,
   fetchSlackMessages,
@@ -22,11 +25,75 @@ interface SlackMessage {
 interface Email {
   id: string; from: string; subject: string; body: string; time: string; priority: string; read: boolean; labels: string[];
 }
+type GhCategory = 'pr' | 'issue' | 'mention' | 'ci' | 'other'
 interface GithubItem {
-  id: string; repo: string; title: string; type: string; reason: string; time: string; unread: boolean; author?: string; state?: string;
+  id: string; repo: string; title: string; type: string; reason: string; time: string; unread: boolean;
+  author?: string; state?: string;
+  category?: GhCategory; actor?: string; html_url?: string;
 }
 interface ChatMsg { role: 'user' | 'assistant'; content: string }
 type Tab = 'slack' | 'gmail' | 'github'
+type GhFilter = 'all' | GhCategory
+
+const GH_FILTERS: { id: GhFilter; label: string }[] = [
+  { id: 'all',     label: 'All' },
+  { id: 'pr',      label: 'PRs' },
+  { id: 'issue',   label: 'Issues' },
+  { id: 'mention', label: 'Mentions' },
+  { id: 'ci',      label: 'CI' },
+  { id: 'other',   label: 'Other' },
+]
+
+// Markdown overrides for assistant chat bubbles. Defined at module scope so
+// React doesn't re-create the object on every render. Tokens come from
+// index.css; only the inline declarations matter for layout/spacing.
+const MD_COMPONENTS: Components = {
+  p:  ({ children }) => <p style={{ margin: '0 0 10px', lineHeight: 1.65 }}>{children}</p>,
+  ul: ({ children }) => <ul style={{ margin: '6px 0 10px', paddingLeft: '1.25em' }}>{children}</ul>,
+  ol: ({ children }) => <ol style={{ margin: '6px 0 10px', paddingLeft: '1.25em' }}>{children}</ol>,
+  li: ({ children }) => <li style={{ margin: '0 0 4px' }}>{children}</li>,
+  strong: ({ children }) => <strong style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{children}</strong>,
+  em: ({ children }) => <em style={{ fontStyle: 'italic' }}>{children}</em>,
+  a: ({ href, children }) => (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      style={{ color: 'var(--accent)', textDecoration: 'underline', textUnderlineOffset: 3 }}
+    >
+      {children}
+    </a>
+  ),
+  code: ({ className, children }) => {
+    // ReactMarkdown passes the language class for fenced blocks; inline code
+    // has no className. The `pre` override handles the fenced-block container.
+    const isBlock = !!className
+    if (isBlock) return <code style={{ fontFamily: 'var(--font-mono)', fontSize: 12.5 }}>{children}</code>
+    return (
+      <code style={{
+        fontFamily: 'var(--font-mono)',
+        fontSize: 12.5,
+        background: 'var(--surface)',
+        padding: '2px 6px',
+        borderRadius: 'var(--radius-sm)',
+        border: '1px solid var(--border-subtle)',
+      }}>{children}</code>
+    )
+  },
+  pre: ({ children }) => (
+    <pre style={{
+      background: 'var(--surface)',
+      padding: '12px 14px',
+      borderRadius: 'var(--radius-md)',
+      border: '1px solid var(--border-subtle)',
+      overflowX: 'auto',
+      margin: '8px 0 12px',
+    }}>{children}</pre>
+  ),
+  h1: ({ children }) => <h1 style={{ fontSize: 18, fontWeight: 600, margin: '8px 0 4px' }}>{children}</h1>,
+  h2: ({ children }) => <h2 style={{ fontSize: 16, fontWeight: 600, margin: '8px 0 4px' }}>{children}</h2>,
+  h3: ({ children }) => <h3 style={{ fontSize: 15, fontWeight: 600, margin: '6px 0 4px' }}>{children}</h3>,
+}
 
 // ── Mock data (fallback) ───────────────────
 const MOCK_SLACK: SlackMessage[] = [
@@ -44,10 +111,10 @@ const MOCK_GMAIL: Email[] = [
 ]
 
 const MOCK_GITHUB: GithubItem[] = [
-  { id: 'g1', repo: 'acme/frontend', title: 'feat: redesign checkout flow',           type: 'PR',    reason: 'review requested', time: '2h ago',    unread: true,  author: 'jdoe',     state: 'open'  },
-  { id: 'g2', repo: 'acme/backend',  title: 'fix: race condition in session handler', type: 'PR',    reason: 'review requested', time: '4h ago',    unread: true,  author: 'priya-n',  state: 'open'  },
-  { id: 'g3', repo: 'acme/frontend', title: 'CI failing on main — lint error',        type: 'Issue', reason: 'mentioned',        time: '5h ago',    unread: true                                      },
-  { id: 'g4', repo: 'acme/infra',    title: 'chore: bump node to 22 LTS',            type: 'PR',    reason: 'subscribed',       time: 'Yesterday', unread: false, author: 'marcus-r', state: 'draft' },
+  { id: 'g1', category: 'pr',      repo: 'acme/frontend', title: 'feat: redesign checkout flow',           type: 'PR',    reason: 'review requested', time: '2h ago',    unread: true,  author: 'jdoe',     state: 'open'  },
+  { id: 'g2', category: 'pr',      repo: 'acme/backend',  title: 'fix: race condition in session handler', type: 'PR',    reason: 'review requested', time: '4h ago',    unread: true,  author: 'priya-n',  state: 'open'  },
+  { id: 'g3', category: 'mention', repo: 'acme/frontend', title: 'CI failing on main — lint error',        type: 'Issue', reason: 'mentioned',        time: '5h ago',    unread: true                                      },
+  { id: 'g4', category: 'pr',      repo: 'acme/infra',    title: 'chore: bump node to 22 LTS',            type: 'PR',    reason: 'subscribed',       time: 'Yesterday', unread: false, author: 'marcus-r', state: 'draft' },
 ]
 
 const SUGGESTED: Record<Tab, string[]> = {
@@ -132,13 +199,38 @@ export default function Agents() {
   useEffect(() => { setMessages([]); setInput('') }, [tab])
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
+  // ── GitHub filter state ──────────────────
+  const [ghCategory, setGhCategory] = useState<GhFilter>('all')
+  const [ghRepo, setGhRepo] = useState<'all' | string>('all')
+  // Reset filters when the underlying data refreshes — avoids stranding the
+  // user on a filter that matches nothing.
+  useEffect(() => { setGhCategory('all'); setGhRepo('all') }, [githubData])
+
+  const filteredGithub = useMemo(() => githubData.filter(it => {
+    if (ghCategory !== 'all' && (it.category ?? 'other') !== ghCategory) return false
+    if (ghRepo !== 'all' && it.repo !== ghRepo) return false
+    return true
+  }), [githubData, ghCategory, ghRepo])
+
+  const ghCategoryCounts = useMemo(() => {
+    const counts: Record<GhFilter, number> = { all: githubData.length, pr: 0, issue: 0, mention: 0, ci: 0, other: 0 }
+    githubData.forEach(it => { counts[(it.category ?? 'other') as GhCategory]++ })
+    return counts
+  }, [githubData])
+
+  const ghRepos = useMemo(() => {
+    const counts = new Map<string, number>()
+    githubData.forEach(it => { if (it.repo) counts.set(it.repo, (counts.get(it.repo) ?? 0) + 1) })
+    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).map(([repo]) => repo)
+  }, [githubData])
+
   const connected = tab === 'slack' ? slackConn : tab === 'gmail' ? gmailConn : githubConn
   const unreadCount = (items: SlackMessage[] | Email[] | GithubItem[]) =>
     items.filter(i => 'read' in i ? !i.read : (i as GithubItem).unread).length
 
   const getContext = useCallback(
-    () => buildContext(tab, slackData, gmailData, githubData),
-    [tab, slackData, gmailData, githubData]
+    () => buildContext(tab, slackData, gmailData, filteredGithub),
+    [tab, slackData, gmailData, filteredGithub]
   )
 
   async function handleConnect() {
@@ -495,25 +587,63 @@ export default function Agents() {
                     </FeedRow>
                   ))}
 
-                  {tab === 'github' && githubData.map((item, i) => (
-                    <FeedRow key={item.id} index={i} unread={item.unread}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <Pill tone={item.type === 'PR' ? 'success' : 'neutral'}>{item.type}</Pill>
-                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent)' }}>{item.repo}</span>
-                          {item.state === 'draft' && <Pill tone="neutral">Draft</Pill>}
+                  {tab === 'github' && (
+                    <>
+                      <GhFilterBar
+                        category={ghCategory}
+                        repo={ghRepo}
+                        counts={ghCategoryCounts}
+                        repos={ghRepos}
+                        onCategory={setGhCategory}
+                        onRepo={setGhRepo}
+                      />
+                      {filteredGithub.length === 0 ? (
+                        <div style={{ padding: '24px 20px', textAlign: 'center' }}>
+                          <Meta>No GitHub events match these filters.</Meta>
                         </div>
-                        <Meta>{item.time}</Meta>
-                      </div>
-                      <p style={{ margin: '0 0 6px', fontSize: 14, color: item.unread ? 'var(--text-primary)' : 'var(--text-secondary)', lineHeight: 1.5 }}>
-                        {item.title}
-                      </p>
-                      <div style={{ display: 'flex', gap: 12 }}>
-                        <Meta>{item.reason}</Meta>
-                        {item.author && <Meta>@{item.author}</Meta>}
-                      </div>
-                    </FeedRow>
-                  ))}
+                      ) : filteredGithub.map((item, i) => (
+                        <FeedRow key={item.id} index={i} unread={item.unread}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <Pill tone={item.type === 'PR' ? 'success' : 'neutral'}>{item.type}</Pill>
+                              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent)' }}>{item.repo}</span>
+                              {item.state === 'draft' && <Pill tone="neutral">Draft</Pill>}
+                            </div>
+                            <Meta>{item.time}</Meta>
+                          </div>
+                          {item.html_url ? (
+                            <a
+                              href={item.html_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{ display: 'block', textDecoration: 'none' }}
+                            >
+                              <p style={{
+                                margin: '0 0 6px',
+                                fontSize: 14,
+                                color: item.unread ? 'var(--text-primary)' : 'var(--text-secondary)',
+                                lineHeight: 1.5,
+                                transition: 'color 120ms ease',
+                              }}
+                                onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent)')}
+                                onMouseLeave={e => (e.currentTarget.style.color = item.unread ? 'var(--text-primary)' : 'var(--text-secondary)')}
+                              >
+                                {item.title}
+                              </p>
+                            </a>
+                          ) : (
+                            <p style={{ margin: '0 0 6px', fontSize: 14, color: item.unread ? 'var(--text-primary)' : 'var(--text-secondary)', lineHeight: 1.5 }}>
+                              {item.title}
+                            </p>
+                          )}
+                          <div style={{ display: 'flex', gap: 12 }}>
+                            <Meta>{item.reason}</Meta>
+                            {(item.actor || item.author) && <Meta>@{item.actor || item.author}</Meta>}
+                          </div>
+                        </FeedRow>
+                      ))}
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -614,18 +744,26 @@ export default function Agents() {
                     </span>
                     <div
                       style={{
-                        maxWidth: '88%',
-                        padding: '11px 14px',
+                        maxWidth: '92%',
+                        padding: '14px 16px',
                         borderRadius: 'var(--radius-md)',
                         background: msg.role === 'user' ? 'var(--accent-subtle)' : 'var(--surface-raised)',
                         border: `1px solid ${msg.role === 'user' ? 'rgba(255,128,0,0.25)' : 'var(--border-subtle)'}`,
                         fontSize: 14,
-                        lineHeight: 1.6,
-                        color: msg.role === 'user' ? 'var(--text-primary)' : 'var(--text-secondary)',
-                        whiteSpace: 'pre-wrap',
+                        lineHeight: 1.65,
+                        color: 'var(--text-primary)',
+                        whiteSpace: msg.role === 'user' ? 'pre-wrap' : 'normal',
                       }}
                     >
-                      {msg.content}
+                      {msg.role === 'assistant' ? (
+                        <div className="agent-md">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
+                            {msg.content}
+                          </ReactMarkdown>
+                        </div>
+                      ) : (
+                        msg.content
+                      )}
                       {msg.role === 'assistant' && streaming && i === messages.length - 1 && msg.content === '' && (
                         <span style={{
                           display: 'inline-block',
@@ -762,5 +900,96 @@ function Meta({ children }: { children: React.ReactNode }) {
     }}>
       {children}
     </span>
+  )
+}
+
+function GhFilterBar({ category, repo, counts, repos, onCategory, onRepo }: {
+  category: GhFilter
+  repo: 'all' | string
+  counts: Record<GhFilter, number>
+  repos: string[]
+  onCategory: (c: GhFilter) => void
+  onRepo: (r: 'all' | string) => void
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2 }}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12,
+        padding: '10px 16px',
+        borderBottom: '1px solid var(--border-subtle)',
+        flexWrap: 'wrap',
+      }}
+    >
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {GH_FILTERS.map(f => {
+          const active = category === f.id
+          return (
+            <button
+              key={f.id}
+              onClick={() => onCategory(f.id)}
+              style={{
+                fontSize: 12,
+                fontFamily: 'var(--font-sans)',
+                padding: '4px 10px',
+                borderRadius: 'var(--radius-pill)',
+                border: active ? '1px solid var(--accent-ring)' : '1px solid var(--border-subtle)',
+                background: active ? 'var(--accent-subtle)' : 'transparent',
+                color: active ? 'var(--accent)' : 'var(--text-tertiary)',
+                cursor: 'pointer',
+                transition: 'color 120ms ease, background 120ms ease, border-color 120ms ease',
+              }}
+              onMouseEnter={e => {
+                if (!active) {
+                  e.currentTarget.style.color = 'var(--text-primary)'
+                  e.currentTarget.style.borderColor = 'var(--border-default)'
+                }
+              }}
+              onMouseLeave={e => {
+                if (!active) {
+                  e.currentTarget.style.color = 'var(--text-tertiary)'
+                  e.currentTarget.style.borderColor = 'var(--border-subtle)'
+                }
+              }}
+            >
+              {f.label}
+              <span style={{
+                marginLeft: 6,
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                color: active ? 'var(--accent)' : 'var(--text-disabled)',
+              }}>
+                {counts[f.id]}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+      {repos.length > 0 && (
+        <select
+          value={repo}
+          onChange={e => onRepo(e.target.value)}
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 12,
+            padding: '5px 10px',
+            background: 'var(--surface-raised)',
+            border: '1px solid var(--border-subtle)',
+            color: 'var(--text-secondary)',
+            borderRadius: 'var(--radius-sm)',
+            cursor: 'pointer',
+            outline: 'none',
+          }}
+        >
+          <option value="all">All repos</option>
+          {repos.map(r => <option key={r} value={r}>{r}</option>)}
+        </select>
+      )}
+    </motion.div>
   )
 }

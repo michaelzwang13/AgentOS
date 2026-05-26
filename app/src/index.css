@@ -191,6 +191,10 @@ button {
   color: inherit;
 }
 
+/* ── Markdown bubbles ── the assistant chat bubble uses react-markdown.
+   Strip trailing whitespace from the last block so the bubble ends flush. */
+.agent-md > *:last-child { margin-bottom: 0 !important; }
+
 /* ── Focus ring — accessible orange halo on interactive elements ── */
 :focus-visible {
   outline: 2px solid var(--accent);

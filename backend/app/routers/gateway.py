@@ -501,9 +501,123 @@ def disconnect_gmail(user: dict = Depends(get_current_user)):
     return {"ok": True}
 
 
+def _time_label(updated: str) -> str:
+    """Relative time string for an ISO-8601 GitHub timestamp."""
+    if not updated:
+        return ""
+    ts = datetime.fromisoformat(updated.replace("Z", "+00:00"))
+    diff = datetime.now(ts.tzinfo) - ts
+    mins = int(diff.total_seconds() / 60)
+    hours = int(diff.total_seconds() / 3600)
+    if mins < 60:
+        return f"{mins}m ago"
+    if hours < 24:
+        return f"{hours}h ago"
+    return ts.strftime("%b %d")
+
+
+# Maps the noisy `reason`/event-type vocabulary to one of 5 buckets the UI
+# filter row exposes: pr | issue | mention | ci | other.
+_NOTIF_CATEGORY_BY_REASON = {
+    "mention": "mention",
+    "team_mention": "mention",
+    "review_requested": "pr",
+}
+_NOTIF_CATEGORY_BY_SUBJECT = {
+    "PullRequest": "pr",
+    "Issue": "issue",
+    "CheckSuite": "ci",
+    "CheckRun": "ci",
+}
+_EVENT_CATEGORY = {
+    "PullRequestEvent": "pr",
+    "PullRequestReviewEvent": "pr",
+    "PullRequestReviewCommentEvent": "pr",
+    "IssuesEvent": "issue",
+    "IssueCommentEvent": "issue",  # upgraded to "mention" when body mentions login
+    "CheckSuiteEvent": "ci",
+}
+_REASON_LABEL = {
+    "assign": "assigned", "author": "author", "comment": "commented",
+    "mention": "mentioned", "review_requested": "review requested",
+    "subscribed": "subscribed", "team_mention": "team mention",
+}
+
+
+def _notification_html_url(n: dict) -> str:
+    """GitHub doesn't ship a direct html_url on notifications — derive from subject.url."""
+    api_url = (n.get("subject") or {}).get("url") or ""
+    if not api_url:
+        return (n.get("repository") or {}).get("html_url", "")
+    # /repos/owner/repo/pulls/123 → /owner/repo/pull/123
+    return (
+        api_url
+        .replace("https://api.github.com/repos/", "https://github.com/")
+        .replace("/pulls/", "/pull/")
+    )
+
+
+def _event_to_item(ev: dict, login: str) -> dict | None:
+    """Normalize a /received_events row. Returns None for event types we skip."""
+    ev_type = ev.get("type", "")
+    base_category = _EVENT_CATEGORY.get(ev_type, "other")
+    payload = ev.get("payload") or {}
+    repo = (ev.get("repo") or {}).get("name", "")
+    actor = (ev.get("actor") or {}).get("login", "")
+    created = ev.get("created_at", "")
+
+    # Issue/PR-comment with @login in the body → mention.
+    body = (payload.get("comment") or {}).get("body", "") or ""
+    if ev_type == "IssueCommentEvent" and login and f"@{login}" in body:
+        base_category = "mention"
+
+    if ev_type in ("PullRequestEvent", "PullRequestReviewEvent", "PullRequestReviewCommentEvent"):
+        pr = payload.get("pull_request") or {}
+        title = pr.get("title") or ""
+        html_url = pr.get("html_url") or ""
+        type_label = "PR"
+        action = payload.get("action") or ""
+        reason = f"{action} {ev_type.replace('Event', '').lower()}".strip()
+        state = "draft" if pr.get("draft") else pr.get("state", "open")
+    elif ev_type in ("IssuesEvent", "IssueCommentEvent"):
+        issue = payload.get("issue") or {}
+        title = issue.get("title") or ""
+        html_url = (payload.get("comment") or {}).get("html_url") or issue.get("html_url") or ""
+        type_label = "Issue"
+        reason = "mentioned" if base_category == "mention" else (payload.get("action") or "commented")
+        state = issue.get("state", "")
+    elif ev_type == "CheckSuiteEvent":
+        cs = payload.get("check_suite") or {}
+        title = f"{cs.get('app', {}).get('name', 'CI')} — {cs.get('conclusion') or cs.get('status') or ''}"
+        html_url = (ev.get("repo") or {}).get("url", "").replace("api.github.com/repos", "github.com")
+        type_label = "CheckSuite"
+        reason = cs.get("conclusion") or "ci"
+        state = cs.get("status", "")
+    else:
+        return None  # PushEvent, WatchEvent, ForkEvent — skip the firehose
+
+    return {
+        "id": f"event-{ev.get('id')}",
+        "category": base_category,
+        "repo": repo,
+        "title": title,
+        "type": type_label,
+        "reason": reason,
+        "time": _time_label(created),
+        "_ts": created,
+        "unread": False,
+        "actor": actor,
+        "author": actor,
+        "state": state,
+        "html_url": html_url,
+    }
+
+
 @router.get("/github/activity")
 async def get_github_activity(user: dict = Depends(get_current_user)):
-    """Fetch GitHub notifications and PRs awaiting review."""
+    """Fetch a richer GitHub activity feed: notifications + review-requested PRs +
+    events on watched repos. Each item carries a normalized `category` so the UI
+    can filter (pr / issue / mention / ci / other)."""
     cred = CredentialStore.get(user["id"], "github")
     if not cred:
         return {"connected": False, "items": []}
@@ -515,79 +629,102 @@ async def get_github_activity(user: dict = Depends(get_current_user)):
         "X-GitHub-Api-Version": "2022-11-28",
     }
 
-    items = []
     async with httpx.AsyncClient() as client:
-        notif_resp, pr_resp = await asyncio.gather(
+        # We need the login before we can call /users/{login}/received_events,
+        # so fetch /user in parallel with notifications + the review-requested
+        # PR search; received_events is a follow-up.
+        user_resp, notif_resp, pr_resp = await asyncio.gather(
+            client.get("https://api.github.com/user", headers=headers),
             client.get(
                 "https://api.github.com/notifications",
-                params={"all": "false", "per_page": 15},
+                params={"all": "true", "per_page": 30},
                 headers=headers,
             ),
             client.get(
                 "https://api.github.com/search/issues",
-                params={"q": "is:pr+is:open+review-requested:@me", "per_page": 10},
+                params={"q": "is:pr is:open review-requested:@me", "per_page": 10},
                 headers=headers,
             ),
         )
 
-        if notif_resp.status_code == 401:
+        if notif_resp.status_code == 401 or user_resp.status_code == 401:
             return {"connected": False, "items": []}
 
-        reason_map = {
-            "assign": "assigned", "author": "author", "comment": "commented",
-            "mention": "mentioned", "review_requested": "review requested",
-            "subscribed": "subscribed", "team_mention": "team mention",
-        }
+        login = user_resp.json().get("login", "") if user_resp.is_success else ""
 
-        if notif_resp.is_success:
-            for n in notif_resp.json():
-                updated = n.get("updated_at", "")
-                ts = datetime.fromisoformat(updated.replace("Z", "+00:00")) if updated else datetime.now()
-                diff = datetime.now(ts.tzinfo) - ts
-                diff_mins = int(diff.total_seconds() / 60)
-                diff_hours = int(diff.total_seconds() / 3600)
-                if diff_mins < 60:
-                    time_label = f"{diff_mins}m ago"
-                elif diff_hours < 24:
-                    time_label = f"{diff_hours}h ago"
-                else:
-                    time_label = ts.strftime("%b %d")
+        events_resp = None
+        if login:
+            try:
+                events_resp = await client.get(
+                    f"https://api.github.com/users/{login}/received_events",
+                    params={"per_page": 30},
+                    headers=headers,
+                )
+            except httpx.HTTPError:
+                events_resp = None
 
-                items.append({
-                    "id": f"notif-{n['id']}",
-                    "repo": n.get("repository", {}).get("full_name", ""),
-                    "title": n.get("subject", {}).get("title", ""),
-                    "type": n.get("subject", {}).get("type", "").replace("PullRequest", "PR"),
-                    "reason": reason_map.get(n.get("reason", ""), n.get("reason", "")),
-                    "time": time_label,
-                    "unread": n.get("unread", False),
-                })
+    items: list[dict] = []
 
-        if pr_resp.is_success:
-            pr_data = pr_resp.json()
-            for pr in pr_data.get("items", []):
-                already = any(i["title"] == pr["title"] for i in items)
-                if not already:
-                    updated = pr.get("updated_at", "")
-                    ts = datetime.fromisoformat(updated.replace("Z", "+00:00")) if updated else datetime.now()
-                    diff = datetime.now(ts.tzinfo) - ts
-                    diff_hours = int(diff.total_seconds() / 3600)
-                    time_label = f"{diff_hours}h ago" if diff_hours < 24 else ts.strftime("%b %d")
+    if notif_resp.is_success:
+        for n in notif_resp.json():
+            subject_type = (n.get("subject") or {}).get("type", "")
+            reason = n.get("reason", "")
+            category = (
+                _NOTIF_CATEGORY_BY_REASON.get(reason)
+                or _NOTIF_CATEGORY_BY_SUBJECT.get(subject_type, "other")
+            )
+            items.append({
+                "id": f"notif-{n['id']}",
+                "category": category,
+                "repo": (n.get("repository") or {}).get("full_name", ""),
+                "title": (n.get("subject") or {}).get("title", ""),
+                "type": subject_type.replace("PullRequest", "PR"),
+                "reason": _REASON_LABEL.get(reason, reason),
+                "time": _time_label(n.get("updated_at", "")),
+                "_ts": n.get("updated_at", ""),
+                "unread": n.get("unread", False),
+                "html_url": _notification_html_url(n),
+            })
 
-                    items.append({
-                        "id": f"pr-{pr['id']}",
-                        "repo": pr.get("repository_url", "").split("repos/")[-1],
-                        "title": pr["title"],
-                        "type": "PR",
-                        "reason": "review requested",
-                        "time": time_label,
-                        "unread": True,
-                        "author": pr.get("user", {}).get("login", ""),
-                        "state": "draft" if pr.get("draft") else pr.get("state", "open"),
-                    })
+    if pr_resp.is_success:
+        for pr in pr_resp.json().get("items", []):
+            updated = pr.get("updated_at", "")
+            items.append({
+                "id": f"pr-{pr['id']}",
+                "category": "pr",
+                "repo": pr.get("repository_url", "").split("repos/")[-1],
+                "title": pr["title"],
+                "type": "PR",
+                "reason": "review requested",
+                "time": _time_label(updated),
+                "_ts": updated,
+                "unread": True,
+                "author": (pr.get("user") or {}).get("login", ""),
+                "state": "draft" if pr.get("draft") else pr.get("state", "open"),
+                "html_url": pr.get("html_url", ""),
+            })
 
-    items.sort(key=lambda x: (0 if x.get("unread") else 1))
-    return {"connected": True, "items": items[:20]}
+    if events_resp is not None and events_resp.is_success:
+        for ev in events_resp.json():
+            item = _event_to_item(ev, login)
+            if item is not None:
+                items.append(item)
+
+    # Dedup by (repo, title). Prefer the row with `unread=True` when both exist
+    # (notifications carry the unread bit; events don't).
+    by_key: dict[tuple[str, str], dict] = {}
+    for it in items:
+        key = (it.get("repo", ""), it.get("title", ""))
+        existing = by_key.get(key)
+        if existing is None or (it.get("unread") and not existing.get("unread")):
+            by_key[key] = it
+
+    deduped = [it for it in by_key.values() if (it.get("title") or "").strip()]
+    deduped.sort(key=lambda x: x.get("_ts") or "", reverse=True)
+    for it in deduped:
+        it.pop("_ts", None)
+
+    return {"connected": True, "items": deduped[:50]}
 
 
 @router.delete("/github/disconnect")
