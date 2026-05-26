@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Components } from 'react-markdown'
@@ -203,7 +203,14 @@ export default function Agents() {
   }, [])
 
   useEffect(() => { setMessages([]); setInput('') }, [tab])
-  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+  // Keep chat scrolled to the latest message. Gate on length>0 and use
+  // block:'end' so scrollIntoView only nudges the inner chat container —
+  // otherwise the empty-on-tab-switch case scrolls the whole document and
+  // clips the page header.
+  useEffect(() => {
+    if (messages.length === 0) return
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+  }, [messages])
 
   // ── GitHub filter state ──────────────────
   const [ghCategory, setGhCategory] = useState<GhFilter>('all')
@@ -445,15 +452,7 @@ export default function Agents() {
         </motion.div>
 
         {/* ── Two-column layout ── */}
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={tab}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-            style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}
-          >
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
 
             {/* ── Feed panel ── */}
             <div style={{
@@ -844,8 +843,7 @@ export default function Agents() {
               </form>
             </motion.div>
 
-          </motion.div>
-        </AnimatePresence>
+        </div>
 
       </div>
     </div>
