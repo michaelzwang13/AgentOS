@@ -1156,9 +1156,10 @@ function RepoSelect({ value, options, onChange }: {
           style={{
             position: 'absolute',
             top: 'calc(100% + 4px)',
-            right: 0,
+            left: 0,
             minWidth: '100%',
-            maxWidth: 340,
+            width: 'max-content',
+            maxWidth: 280,
             maxHeight: 280,
             overflowY: 'auto',
             background: 'var(--surface-raised)',
