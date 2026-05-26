@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Components } from 'react-markdown'
-import { Layers, GitPullRequest, CircleDot, AtSign, Workflow, MoreHorizontal } from 'lucide-react'
+import { Layers, GitPullRequest, CircleDot, AtSign, Workflow, MoreHorizontal, ChevronDown, Check } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import {
   isLoggedIn,
@@ -945,24 +945,7 @@ function GhFilterBar({ category, repo, counts, repos, onCategory, onRepo }: {
         ))}
       </div>
       {repos.length > 0 && (
-        <select
-          value={repo}
-          onChange={e => onRepo(e.target.value)}
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 12,
-            padding: '5px 10px',
-            background: 'var(--surface-raised)',
-            border: '1px solid var(--border-subtle)',
-            color: 'var(--text-secondary)',
-            borderRadius: 'var(--radius-sm)',
-            cursor: 'pointer',
-            outline: 'none',
-          }}
-        >
-          <option value="all">All repos</option>
-          {repos.map(r => <option key={r} value={r}>{r}</option>)}
-        </select>
+        <RepoSelect value={repo} options={repos} onChange={onRepo} />
       )}
     </motion.div>
   )
@@ -1097,5 +1080,150 @@ function TypeBadge({ category, typeLabel }: { category?: GhCategory; typeLabel: 
         </div>
       )}
     </div>
+  )
+}
+
+function RepoSelect({ value, options, onChange }: {
+  value: 'all' | string
+  options: string[]
+  onChange: (v: 'all' | string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef<HTMLDivElement | null>(null)
+
+  // Close on click-outside or Escape.
+  useEffect(() => {
+    if (!open) return
+    function onDocClick(e: MouseEvent) {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false)
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDocClick)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  const label = value === 'all' ? 'All repos' : value
+
+  return (
+    <div ref={wrapRef} style={{ position: 'relative', flexShrink: 0 }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 8,
+          fontFamily: 'var(--font-mono)',
+          fontSize: 12,
+          padding: '5px 10px',
+          background: open ? 'var(--surface-hover)' : 'var(--surface-raised)',
+          border: `1px solid ${open ? 'var(--border-default)' : 'var(--border-subtle)'}`,
+          color: 'var(--text-secondary)',
+          borderRadius: 'var(--radius-sm)',
+          cursor: 'pointer',
+          transition: 'background 120ms ease, border-color 120ms ease',
+          maxWidth: 200,
+        }}
+        onMouseEnter={e => { if (!open) e.currentTarget.style.borderColor = 'var(--border-default)' }}
+        onMouseLeave={e => { if (!open) e.currentTarget.style.borderColor = 'var(--border-subtle)' }}
+      >
+        <span style={{
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          color: 'var(--text-primary)',
+        }}>{label}</span>
+        <ChevronDown size={12} style={{
+          color: 'var(--text-tertiary)',
+          transition: 'transform 150ms ease',
+          transform: open ? 'rotate(180deg)' : 'rotate(0)',
+          flexShrink: 0,
+        }} />
+      </button>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.12 }}
+          role="listbox"
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 4px)',
+            right: 0,
+            minWidth: '100%',
+            maxWidth: 340,
+            maxHeight: 280,
+            overflowY: 'auto',
+            background: 'var(--surface-raised)',
+            border: '1px solid var(--border-default)',
+            borderRadius: 'var(--radius-md)',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+            zIndex: 20,
+            padding: 4,
+          }}
+        >
+          <RepoOption
+            label="All repos"
+            selected={value === 'all'}
+            onClick={() => { onChange('all'); setOpen(false) }}
+          />
+          {options.map(r => (
+            <RepoOption
+              key={r}
+              label={r}
+              selected={value === r}
+              onClick={() => { onChange(r); setOpen(false) }}
+            />
+          ))}
+        </motion.div>
+      )}
+    </div>
+  )
+}
+
+function RepoOption({ label, selected, onClick }: {
+  label: string
+  selected: boolean
+  onClick: () => void
+}) {
+  const [hover, setHover] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      role="option"
+      aria-selected={selected}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12,
+        width: '100%',
+        textAlign: 'left',
+        fontFamily: 'var(--font-mono)',
+        fontSize: 12,
+        padding: '6px 8px',
+        background: hover ? 'var(--surface-hover)' : 'transparent',
+        color: selected ? 'var(--accent)' : 'var(--text-secondary)',
+        borderRadius: 'var(--radius-sm)',
+        cursor: 'pointer',
+        transition: 'background 100ms ease, color 100ms ease',
+      }}
+    >
+      <span style={{
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+      }}>{label}</span>
+      {selected && <Check size={12} style={{ color: 'var(--accent)', flexShrink: 0 }} />}
+    </button>
   )
 }
