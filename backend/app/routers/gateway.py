@@ -1,6 +1,4 @@
 import asyncio
-import time
-from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from app.auth import get_current_user
@@ -10,7 +8,7 @@ from app.models.reviewed_pr import ReviewedPRModel
 from app.services.gateway import GatewayService
 from app.services.policy import require_action
 from app.services.credential_store import CredentialStore
-import httpx
+from app.services import feed_fetchers, signal_feed_cache
 
 router = APIRouter(prefix="/gateway", tags=["gateway"])
 
@@ -211,11 +209,13 @@ async def post_digest_to_slack(
     if not settings.anthropic_api_key:
         raise HTTPException(500, "ANTHROPIC_API_KEY not configured")
 
-    # Pull the three feeds in parallel using the existing route handlers.
+    # Pull the three feeds in parallel; piggy-back on the cache so a digest
+    # right after a feed-page open is essentially free.
+    uid = user["id"]
     slack_res, gmail_res, github_res = await asyncio.gather(
-        get_slack_messages(user),
-        get_gmail_messages(user),
-        get_github_activity(user),
+        signal_feed_cache.get_or_fetch(uid, "slack",  lambda: feed_fetchers.slack_messages(uid)),
+        signal_feed_cache.get_or_fetch(uid, "gmail",  lambda: feed_fetchers.gmail_messages(uid)),
+        signal_feed_cache.get_or_fetch(uid, "github", lambda: feed_fetchers.github_activity(uid)),
         return_exceptions=True,
     )
 
@@ -300,297 +300,41 @@ async def post_digest_to_slack(
 
 @router.get("/slack/messages")
 async def get_slack_messages(user: dict = Depends(get_current_user)):
-    """Fetch recent messages from the user's connected Slack workspace."""
-    cred = CredentialStore.get(user["id"], "slack")
-    if not cred:
-        return {"connected": False, "messages": []}
-
-    token = cred["token"]
-    user_cache: dict[str, str] = {}
-
-    async with httpx.AsyncClient() as client:
-        channels_resp = await client.get(
-            "https://slack.com/api/conversations.list",
-            params={
-                "types": "public_channel,private_channel",
-                "limit": 20,
-                "exclude_archived": "true",
-            },
-            headers={"Authorization": f"Bearer {token}"},
-        )
-        channels_data = channels_resp.json()
-
-    if not channels_data.get("ok"):
-        return {"connected": False, "error": channels_data.get("error")}
-
-    channels = [c for c in channels_data.get("channels", []) if c.get("is_member")]
-    messages = []
-
-    async with httpx.AsyncClient() as client:
-        for channel in channels[:5]:
-            hist_resp = await client.get(
-                "https://slack.com/api/conversations.history",
-                params={"channel": channel["id"], "limit": 3},
-                headers={"Authorization": f"Bearer {token}"},
-            )
-            hist = hist_resp.json()
-            if not hist.get("ok") or not hist.get("messages"):
-                continue
-
-            for msg in hist["messages"]:
-                if not msg.get("user") or not msg.get("text"):
-                    continue
-
-                uid = msg["user"]
-                if uid not in user_cache:
-                    u_resp = await client.get(
-                        "https://slack.com/api/users.info",
-                        params={"user": uid},
-                        headers={"Authorization": f"Bearer {token}"},
-                    )
-                    u_data = u_resp.json()
-                    if u_data.get("ok"):
-                        profile = u_data["user"]["profile"]
-                        name = profile.get("display_name") or profile.get("real_name") or uid
-                    else:
-                        name = uid
-                    user_cache[uid] = name
-
-                name = user_cache[uid]
-                ts = float(msg["ts"])
-                now = time.time()
-                diff_mins = int((now - ts) / 60)
-                diff_hours = int((now - ts) / 3600)
-
-                if diff_mins < 60:
-                    time_label = f"{diff_mins}m ago"
-                elif diff_hours < 24:
-                    time_label = f"{diff_hours}h ago"
-                else:
-                    time_label = datetime.fromtimestamp(ts).strftime("%b %d")
-
-                initials = "".join(w[0] for w in name.split() if w).upper()[:2]
-
-                messages.append({
-                    "id": msg["ts"],
-                    "channel": f"#{channel['name']}",
-                    "user": name,
-                    "avatar": initials,
-                    "text": msg["text"],
-                    "time": time_label,
-                    "reactions": [
-                        {"emoji": f":{r['name']}:", "count": r["count"]}
-                        for r in msg.get("reactions", [])
-                    ],
-                })
-
-    messages.sort(key=lambda m: float(m["id"]), reverse=True)
-    return {"connected": True, "messages": messages}
+    return await signal_feed_cache.get_or_fetch(
+        user["id"], "slack", lambda: feed_fetchers.slack_messages(user["id"])
+    )
 
 
 @router.delete("/slack/disconnect")
 def disconnect_slack(user: dict = Depends(get_current_user)):
     CredentialStore.delete(user["id"], "slack")
+    signal_feed_cache.clear(user["id"], "slack")
     return {"ok": True}
 
 
 @router.get("/gmail/messages")
 async def get_gmail_messages(user: dict = Depends(get_current_user)):
-    """Fetch recent inbox messages from the user's connected Gmail account."""
-    cred = CredentialStore.get(user["id"], "gmail")
-    if not cred:
-        return {"connected": False, "emails": []}
-
-    # Token may be stored as dict (access_token + refresh_token) or plain string
-    token_data = cred["token"]
-    if isinstance(token_data, dict):
-        access_token = token_data.get("access_token", "")
-    else:
-        access_token = token_data
-
-    headers = {"Authorization": f"Bearer {access_token}"}
-
-    async with httpx.AsyncClient() as client:
-        list_resp = await client.get(
-            "https://gmail.googleapis.com/gmail/v1/users/me/messages",
-            params={"maxResults": 10, "labelIds": "INBOX"},
-            headers=headers,
-        )
-        if list_resp.status_code == 401:
-            # Try refresh if available
-            if isinstance(token_data, dict) and token_data.get("refresh_token"):
-                from app.config import get_settings
-                settings = get_settings()
-                refresh_resp = await client.post(
-                    "https://oauth2.googleapis.com/token",
-                    data={
-                        "client_id": settings.google_client_id,
-                        "client_secret": settings.google_client_secret,
-                        "refresh_token": token_data["refresh_token"],
-                        "grant_type": "refresh_token",
-                    },
-                )
-                rdata = refresh_resp.json()
-                access_token = rdata.get("access_token")
-                if not access_token:
-                    return {"connected": False, "emails": []}
-                headers = {"Authorization": f"Bearer {access_token}"}
-                list_resp = await client.get(
-                    "https://gmail.googleapis.com/gmail/v1/users/me/messages",
-                    params={"maxResults": 10, "labelIds": "INBOX"},
-                    headers=headers,
-                )
-            else:
-                return {"connected": False, "emails": []}
-
-        if not list_resp.is_success:
-            return {"connected": False, "error": "gmail_api_error"}
-
-        msg_ids = [m["id"] for m in list_resp.json().get("messages", [])]
-
-        emails = []
-        for mid in msg_ids[:10]:
-            msg_resp = await client.get(
-                f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{mid}",
-                params={"format": "full"},
-                headers=headers,
-            )
-            if not msg_resp.is_success:
-                continue
-            msg = msg_resp.json()
-            hdrs = {h["name"].lower(): h["value"] for h in msg.get("payload", {}).get("headers", [])}
-            from_raw = hdrs.get("from", "")
-            from_name = from_raw.split("<")[0].strip().strip('"') if "<" in from_raw else from_raw
-            subject = hdrs.get("subject", "(no subject)")
-            snippet = msg.get("snippet", "")
-            label_ids = msg.get("labelIds", [])
-            is_unread = "UNREAD" in label_ids
-            internal_date = msg.get("internalDate", "0")
-
-            ts = int(internal_date) / 1000
-            now = time.time()
-            diff_mins = int((now - ts) / 60)
-            diff_hours = int((now - ts) / 3600)
-            if diff_mins < 60:
-                time_label = f"{diff_mins}m ago"
-            elif diff_hours < 24:
-                time_label = f"{diff_hours}h ago"
-            else:
-                time_label = datetime.fromtimestamp(ts).strftime("%b %d")
-
-            labels = [l.lower().replace("category_", "") for l in label_ids
-                      if l not in ("INBOX", "UNREAD", "IMPORTANT", "CATEGORY_PERSONAL")][:2]
-
-            emails.append({
-                "id": mid,
-                "from": from_name,
-                "subject": subject,
-                "body": snippet[:300],
-                "time": time_label,
-                "priority": "high" if is_unread else "low",
-                "read": not is_unread,
-                "labels": labels,
-            })
-
-    return {"connected": True, "emails": emails}
+    return await signal_feed_cache.get_or_fetch(
+        user["id"], "gmail", lambda: feed_fetchers.gmail_messages(user["id"])
+    )
 
 
 @router.delete("/gmail/disconnect")
 def disconnect_gmail(user: dict = Depends(get_current_user)):
     CredentialStore.delete(user["id"], "gmail")
+    signal_feed_cache.clear(user["id"], "gmail")
     return {"ok": True}
 
 
 @router.get("/github/activity")
 async def get_github_activity(user: dict = Depends(get_current_user)):
-    """Fetch GitHub notifications and PRs awaiting review."""
-    cred = CredentialStore.get(user["id"], "github")
-    if not cred:
-        return {"connected": False, "items": []}
-
-    token = cred["token"]
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
-
-    items = []
-    async with httpx.AsyncClient() as client:
-        notif_resp, pr_resp = await asyncio.gather(
-            client.get(
-                "https://api.github.com/notifications",
-                params={"all": "false", "per_page": 15},
-                headers=headers,
-            ),
-            client.get(
-                "https://api.github.com/search/issues",
-                params={"q": "is:pr+is:open+review-requested:@me", "per_page": 10},
-                headers=headers,
-            ),
-        )
-
-        if notif_resp.status_code == 401:
-            return {"connected": False, "items": []}
-
-        reason_map = {
-            "assign": "assigned", "author": "author", "comment": "commented",
-            "mention": "mentioned", "review_requested": "review requested",
-            "subscribed": "subscribed", "team_mention": "team mention",
-        }
-
-        if notif_resp.is_success:
-            for n in notif_resp.json():
-                updated = n.get("updated_at", "")
-                ts = datetime.fromisoformat(updated.replace("Z", "+00:00")) if updated else datetime.now()
-                diff = datetime.now(ts.tzinfo) - ts
-                diff_mins = int(diff.total_seconds() / 60)
-                diff_hours = int(diff.total_seconds() / 3600)
-                if diff_mins < 60:
-                    time_label = f"{diff_mins}m ago"
-                elif diff_hours < 24:
-                    time_label = f"{diff_hours}h ago"
-                else:
-                    time_label = ts.strftime("%b %d")
-
-                items.append({
-                    "id": f"notif-{n['id']}",
-                    "repo": n.get("repository", {}).get("full_name", ""),
-                    "title": n.get("subject", {}).get("title", ""),
-                    "type": n.get("subject", {}).get("type", "").replace("PullRequest", "PR"),
-                    "reason": reason_map.get(n.get("reason", ""), n.get("reason", "")),
-                    "time": time_label,
-                    "unread": n.get("unread", False),
-                })
-
-        if pr_resp.is_success:
-            pr_data = pr_resp.json()
-            for pr in pr_data.get("items", []):
-                already = any(i["title"] == pr["title"] for i in items)
-                if not already:
-                    updated = pr.get("updated_at", "")
-                    ts = datetime.fromisoformat(updated.replace("Z", "+00:00")) if updated else datetime.now()
-                    diff = datetime.now(ts.tzinfo) - ts
-                    diff_hours = int(diff.total_seconds() / 3600)
-                    time_label = f"{diff_hours}h ago" if diff_hours < 24 else ts.strftime("%b %d")
-
-                    items.append({
-                        "id": f"pr-{pr['id']}",
-                        "repo": pr.get("repository_url", "").split("repos/")[-1],
-                        "title": pr["title"],
-                        "type": "PR",
-                        "reason": "review requested",
-                        "time": time_label,
-                        "unread": True,
-                        "author": pr.get("user", {}).get("login", ""),
-                        "state": "draft" if pr.get("draft") else pr.get("state", "open"),
-                    })
-
-    items.sort(key=lambda x: (0 if x.get("unread") else 1))
-    return {"connected": True, "items": items[:20]}
+    return await signal_feed_cache.get_or_fetch(
+        user["id"], "github", lambda: feed_fetchers.github_activity(user["id"])
+    )
 
 
 @router.delete("/github/disconnect")
 def disconnect_github(user: dict = Depends(get_current_user)):
     CredentialStore.delete(user["id"], "github")
+    signal_feed_cache.clear(user["id"], "github")
     return {"ok": True}

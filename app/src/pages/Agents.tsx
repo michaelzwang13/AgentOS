@@ -1,5 +1,10 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { motion } from 'framer-motion'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import type { Components } from 'react-markdown'
+import { Layers, GitPullRequest, CircleDot, AtSign, Workflow, MoreHorizontal, ChevronDown, Check } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import {
   isLoggedIn,
   fetchSlackMessages,
@@ -22,11 +27,75 @@ interface SlackMessage {
 interface Email {
   id: string; from: string; subject: string; body: string; time: string; priority: string; read: boolean; labels: string[];
 }
+type GhCategory = 'pr' | 'issue' | 'mention' | 'ci' | 'other'
 interface GithubItem {
-  id: string; repo: string; title: string; type: string; reason: string; time: string; unread: boolean; author?: string; state?: string;
+  id: string; repo: string; title: string; type: string; reason: string; time: string; unread: boolean;
+  author?: string; state?: string;
+  category?: GhCategory; actor?: string; html_url?: string;
 }
 interface ChatMsg { role: 'user' | 'assistant'; content: string }
 type Tab = 'slack' | 'gmail' | 'github'
+type GhFilter = 'all' | GhCategory
+
+const GH_FILTERS: { id: GhFilter; label: string; icon: LucideIcon }[] = [
+  { id: 'all',     label: 'All',      icon: Layers },
+  { id: 'pr',      label: 'PRs',      icon: GitPullRequest },
+  { id: 'issue',   label: 'Issues',   icon: CircleDot },
+  { id: 'mention', label: 'Mentions', icon: AtSign },
+  { id: 'ci',      label: 'CI',       icon: Workflow },
+  { id: 'other',   label: 'Other',    icon: MoreHorizontal },
+]
+
+// Markdown overrides for assistant chat bubbles. Defined at module scope so
+// React doesn't re-create the object on every render. Tokens come from
+// index.css; only the inline declarations matter for layout/spacing.
+const MD_COMPONENTS: Components = {
+  p:  ({ children }) => <p style={{ margin: '0 0 10px', lineHeight: 1.65 }}>{children}</p>,
+  ul: ({ children }) => <ul style={{ margin: '6px 0 10px', paddingLeft: '1.25em' }}>{children}</ul>,
+  ol: ({ children }) => <ol style={{ margin: '6px 0 10px', paddingLeft: '1.25em' }}>{children}</ol>,
+  li: ({ children }) => <li style={{ margin: '0 0 4px' }}>{children}</li>,
+  strong: ({ children }) => <strong style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{children}</strong>,
+  em: ({ children }) => <em style={{ fontStyle: 'italic' }}>{children}</em>,
+  a: ({ href, children }) => (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      style={{ color: 'var(--accent)', textDecoration: 'underline', textUnderlineOffset: 3 }}
+    >
+      {children}
+    </a>
+  ),
+  code: ({ className, children }) => {
+    // ReactMarkdown passes the language class for fenced blocks; inline code
+    // has no className. The `pre` override handles the fenced-block container.
+    const isBlock = !!className
+    if (isBlock) return <code style={{ fontFamily: 'var(--font-mono)', fontSize: 12.5 }}>{children}</code>
+    return (
+      <code style={{
+        fontFamily: 'var(--font-mono)',
+        fontSize: 12.5,
+        background: 'var(--surface)',
+        padding: '2px 6px',
+        borderRadius: 'var(--radius-sm)',
+        border: '1px solid var(--border-subtle)',
+      }}>{children}</code>
+    )
+  },
+  pre: ({ children }) => (
+    <pre style={{
+      background: 'var(--surface)',
+      padding: '12px 14px',
+      borderRadius: 'var(--radius-md)',
+      border: '1px solid var(--border-subtle)',
+      overflowX: 'auto',
+      margin: '8px 0 12px',
+    }}>{children}</pre>
+  ),
+  h1: ({ children }) => <h1 style={{ fontSize: 18, fontWeight: 600, margin: '8px 0 4px' }}>{children}</h1>,
+  h2: ({ children }) => <h2 style={{ fontSize: 16, fontWeight: 600, margin: '8px 0 4px' }}>{children}</h2>,
+  h3: ({ children }) => <h3 style={{ fontSize: 15, fontWeight: 600, margin: '6px 0 4px' }}>{children}</h3>,
+}
 
 // ── Mock data (fallback) ───────────────────
 const MOCK_SLACK: SlackMessage[] = [
@@ -44,10 +113,10 @@ const MOCK_GMAIL: Email[] = [
 ]
 
 const MOCK_GITHUB: GithubItem[] = [
-  { id: 'g1', repo: 'acme/frontend', title: 'feat: redesign checkout flow',           type: 'PR',    reason: 'review requested', time: '2h ago',    unread: true,  author: 'jdoe',     state: 'open'  },
-  { id: 'g2', repo: 'acme/backend',  title: 'fix: race condition in session handler', type: 'PR',    reason: 'review requested', time: '4h ago',    unread: true,  author: 'priya-n',  state: 'open'  },
-  { id: 'g3', repo: 'acme/frontend', title: 'CI failing on main — lint error',        type: 'Issue', reason: 'mentioned',        time: '5h ago',    unread: true                                      },
-  { id: 'g4', repo: 'acme/infra',    title: 'chore: bump node to 22 LTS',            type: 'PR',    reason: 'subscribed',       time: 'Yesterday', unread: false, author: 'marcus-r', state: 'draft' },
+  { id: 'g1', category: 'pr',      repo: 'acme/frontend', title: 'feat: redesign checkout flow',           type: 'PR',    reason: 'review requested', time: '2h ago',    unread: true,  author: 'jdoe',     state: 'open'  },
+  { id: 'g2', category: 'pr',      repo: 'acme/backend',  title: 'fix: race condition in session handler', type: 'PR',    reason: 'review requested', time: '4h ago',    unread: true,  author: 'priya-n',  state: 'open'  },
+  { id: 'g3', category: 'mention', repo: 'acme/frontend', title: 'CI failing on main — lint error',        type: 'Issue', reason: 'mentioned',        time: '5h ago',    unread: true                                      },
+  { id: 'g4', category: 'pr',      repo: 'acme/infra',    title: 'chore: bump node to 22 LTS',            type: 'PR',    reason: 'subscribed',       time: 'Yesterday', unread: false, author: 'marcus-r', state: 'draft' },
 ]
 
 const SUGGESTED: Record<Tab, string[]> = {
@@ -114,31 +183,67 @@ export default function Agents() {
     ]).finally(() => setFeedLoading(false))
   }, [])
 
-  // OAuth redirect params
+  // OAuth redirect params — also flip the active tab to whichever tool the
+  // user just connected, so they land on its feed instead of the Slack default.
   useEffect(() => {
     const p = new URLSearchParams(window.location.search)
     if (p.get('connected') === 'true' || p.get('connected') === 'slack') {
+      setTab('slack')
       fetchSlackMessages().then(d => { if (d.connected) { setSlackConn(true); setSlackData(d.messages) } })
     }
     if (p.get('gmail_connected')) {
+      setTab('gmail')
       fetchGmailMessages().then(d => { if (d.connected) { setGmailConn(true); setGmailData(d.emails) } })
     }
     if (p.get('github_connected')) {
+      setTab('github')
       fetchGithubActivity().then(d => { if (d.connected) { setGithubConn(true); setGithubData(d.items) } })
     }
     if (p.toString()) window.history.replaceState({}, '', '/agents')
   }, [])
 
   useEffect(() => { setMessages([]); setInput('') }, [tab])
-  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+  // Keep chat scrolled to the latest message. Gate on length>0 and use
+  // block:'end' so scrollIntoView only nudges the inner chat container —
+  // otherwise the empty-on-tab-switch case scrolls the whole document and
+  // clips the page header.
+  useEffect(() => {
+    if (messages.length === 0) return
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+  }, [messages])
+
+  // ── GitHub filter state ──────────────────
+  const [ghCategory, setGhCategory] = useState<GhFilter>('all')
+  const [ghRepo, setGhRepo] = useState<'all' | string>('all')
+  // Reset filters when the underlying data refreshes — avoids stranding the
+  // user on a filter that matches nothing.
+  useEffect(() => { setGhCategory('all'); setGhRepo('all') }, [githubData])
+
+  const filteredGithub = useMemo(() => githubData.filter(it => {
+    if (ghCategory !== 'all' && (it.category ?? 'other') !== ghCategory) return false
+    if (ghRepo !== 'all' && it.repo !== ghRepo) return false
+    return true
+  }), [githubData, ghCategory, ghRepo])
+
+  const ghCategoryCounts = useMemo(() => {
+    const counts: Record<GhFilter, number> = { all: githubData.length, pr: 0, issue: 0, mention: 0, ci: 0, other: 0 }
+    githubData.forEach(it => { counts[(it.category ?? 'other') as GhCategory]++ })
+    return counts
+  }, [githubData])
+
+  const ghRepos = useMemo(() => {
+    const counts = new Map<string, number>()
+    githubData.forEach(it => { if (it.repo) counts.set(it.repo, (counts.get(it.repo) ?? 0) + 1) })
+    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).map(([repo]) => repo)
+  }, [githubData])
 
   const connected = tab === 'slack' ? slackConn : tab === 'gmail' ? gmailConn : githubConn
   const unreadCount = (items: SlackMessage[] | Email[] | GithubItem[]) =>
     items.filter(i => 'read' in i ? !i.read : (i as GithubItem).unread).length
 
   const getContext = useCallback(
-    () => buildContext(tab, slackData, gmailData, githubData),
-    [tab, slackData, gmailData, githubData]
+    () => buildContext(tab, slackData, gmailData, filteredGithub),
+    [tab, slackData, gmailData, filteredGithub]
   )
 
   async function handleConnect() {
@@ -347,15 +452,7 @@ export default function Agents() {
         </motion.div>
 
         {/* ── Two-column layout ── */}
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={tab}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-            style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}
-          >
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
 
             {/* ── Feed panel ── */}
             <div style={{
@@ -427,8 +524,8 @@ export default function Agents() {
                   ) : (
                     <button
                       onClick={handleDisconnect}
-                      style={{ fontSize: 12, color: 'var(--text-tertiary)' }}
-                      onMouseEnter={e => (e.currentTarget.style.color = 'var(--text-primary)')}
+                      style={{ fontSize: 12, color: 'var(--text-tertiary)', transition: 'color 120ms ease' }}
+                      onMouseEnter={e => (e.currentTarget.style.color = 'var(--status-error)')}
                       onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-tertiary)')}
                     >
                       Disconnect
@@ -495,25 +592,63 @@ export default function Agents() {
                     </FeedRow>
                   ))}
 
-                  {tab === 'github' && githubData.map((item, i) => (
-                    <FeedRow key={item.id} index={i} unread={item.unread}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <Pill tone={item.type === 'PR' ? 'success' : 'neutral'}>{item.type}</Pill>
-                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent)' }}>{item.repo}</span>
-                          {item.state === 'draft' && <Pill tone="neutral">Draft</Pill>}
+                  {tab === 'github' && (
+                    <>
+                      <GhFilterBar
+                        category={ghCategory}
+                        repo={ghRepo}
+                        counts={ghCategoryCounts}
+                        repos={ghRepos}
+                        onCategory={setGhCategory}
+                        onRepo={setGhRepo}
+                      />
+                      {filteredGithub.length === 0 ? (
+                        <div style={{ padding: '24px 20px', textAlign: 'center' }}>
+                          <Meta>No GitHub events match these filters.</Meta>
                         </div>
-                        <Meta>{item.time}</Meta>
-                      </div>
-                      <p style={{ margin: '0 0 6px', fontSize: 14, color: item.unread ? 'var(--text-primary)' : 'var(--text-secondary)', lineHeight: 1.5 }}>
-                        {item.title}
-                      </p>
-                      <div style={{ display: 'flex', gap: 12 }}>
-                        <Meta>{item.reason}</Meta>
-                        {item.author && <Meta>@{item.author}</Meta>}
-                      </div>
-                    </FeedRow>
-                  ))}
+                      ) : filteredGithub.map((item, i) => (
+                        <FeedRow key={item.id} index={i} unread={item.unread}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <TypeBadge category={item.category} typeLabel={item.type} />
+                              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent)' }}>{item.repo}</span>
+                              {item.state === 'draft' && <Pill tone="neutral">Draft</Pill>}
+                            </div>
+                            <Meta>{item.time}</Meta>
+                          </div>
+                          {item.html_url ? (
+                            <a
+                              href={item.html_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{ display: 'block', textDecoration: 'none' }}
+                            >
+                              <p style={{
+                                margin: '0 0 6px',
+                                fontSize: 14,
+                                color: item.unread ? 'var(--text-primary)' : 'var(--text-secondary)',
+                                lineHeight: 1.5,
+                                transition: 'color 120ms ease',
+                              }}
+                                onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent)')}
+                                onMouseLeave={e => (e.currentTarget.style.color = item.unread ? 'var(--text-primary)' : 'var(--text-secondary)')}
+                              >
+                                {item.title}
+                              </p>
+                            </a>
+                          ) : (
+                            <p style={{ margin: '0 0 6px', fontSize: 14, color: item.unread ? 'var(--text-primary)' : 'var(--text-secondary)', lineHeight: 1.5 }}>
+                              {item.title}
+                            </p>
+                          )}
+                          <div style={{ display: 'flex', gap: 12 }}>
+                            <Meta>{item.reason}</Meta>
+                            {(item.actor || item.author) && <Meta>@{item.actor || item.author}</Meta>}
+                          </div>
+                        </FeedRow>
+                      ))}
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -614,18 +749,26 @@ export default function Agents() {
                     </span>
                     <div
                       style={{
-                        maxWidth: '88%',
-                        padding: '11px 14px',
+                        maxWidth: '92%',
+                        padding: '14px 16px',
                         borderRadius: 'var(--radius-md)',
                         background: msg.role === 'user' ? 'var(--accent-subtle)' : 'var(--surface-raised)',
                         border: `1px solid ${msg.role === 'user' ? 'rgba(255,128,0,0.25)' : 'var(--border-subtle)'}`,
                         fontSize: 14,
-                        lineHeight: 1.6,
-                        color: msg.role === 'user' ? 'var(--text-primary)' : 'var(--text-secondary)',
-                        whiteSpace: 'pre-wrap',
+                        lineHeight: 1.65,
+                        color: 'var(--text-primary)',
+                        whiteSpace: msg.role === 'user' ? 'pre-wrap' : 'normal',
                       }}
                     >
-                      {msg.content}
+                      {msg.role === 'assistant' ? (
+                        <div className="agent-md">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
+                            {msg.content}
+                          </ReactMarkdown>
+                        </div>
+                      ) : (
+                        msg.content
+                      )}
                       {msg.role === 'assistant' && streaming && i === messages.length - 1 && msg.content === '' && (
                         <span style={{
                           display: 'inline-block',
@@ -700,8 +843,7 @@ export default function Agents() {
               </form>
             </motion.div>
 
-          </motion.div>
-        </AnimatePresence>
+        </div>
 
       </div>
     </div>
@@ -762,5 +904,325 @@ function Meta({ children }: { children: React.ReactNode }) {
     }}>
       {children}
     </span>
+  )
+}
+
+function GhFilterBar({ category, repo, counts, repos, onCategory, onRepo }: {
+  category: GhFilter
+  repo: 'all' | string
+  counts: Record<GhFilter, number>
+  repos: string[]
+  onCategory: (c: GhFilter) => void
+  onRepo: (r: 'all' | string) => void
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2 }}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12,
+        padding: '10px 16px',
+        borderBottom: '1px solid var(--border-subtle)',
+        flexWrap: 'wrap',
+      }}
+    >
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {GH_FILTERS.map(f => (
+          <FilterPill
+            key={f.id}
+            label={f.label}
+            icon={f.icon}
+            count={counts[f.id]}
+            active={category === f.id}
+            onClick={() => onCategory(f.id)}
+          />
+        ))}
+      </div>
+      {repos.length > 0 && (
+        <RepoSelect value={repo} options={repos} onChange={onRepo} />
+      )}
+    </motion.div>
+  )
+}
+
+function FilterPill({ label, icon: Icon, count, active, onClick }: {
+  label: string
+  icon: LucideIcon
+  count: number
+  active: boolean
+  onClick: () => void
+}) {
+  const [hover, setHover] = useState(false)
+  return (
+    <div style={{ position: 'relative' }}>
+      <button
+        onClick={onClick}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        aria-label={label}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '5px 10px',
+          borderRadius: 'var(--radius-pill)',
+          border: active ? '1px solid var(--accent-ring)' : '1px solid var(--border-subtle)',
+          background: active ? 'var(--accent-subtle)' : hover ? 'var(--surface-hover)' : 'transparent',
+          color: active ? 'var(--accent)' : hover ? 'var(--text-primary)' : 'var(--text-tertiary)',
+          cursor: 'pointer',
+          transition: 'color 120ms ease, background 120ms ease, border-color 120ms ease',
+        }}
+      >
+        <Icon size={13} strokeWidth={2} />
+        <span style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: 10,
+          color: active ? 'var(--accent)' : 'var(--text-disabled)',
+          lineHeight: 1,
+        }}>
+          {count}
+        </span>
+      </button>
+      {hover && (
+        <div
+          role="tooltip"
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 6px)',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            padding: '4px 8px',
+            fontSize: 11,
+            fontFamily: 'var(--font-mono)',
+            color: 'var(--text-primary)',
+            background: 'var(--surface-raised)',
+            border: '1px solid var(--border-default)',
+            borderRadius: 'var(--radius-sm)',
+            whiteSpace: 'nowrap',
+            pointerEvents: 'none',
+            zIndex: 10,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+          }}
+        >
+          {label}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Driven by item.category so a 'mention'-bucket PR shows the AtSign even
+// though item.type is still 'PR'. Tooltip = the raw GitHub type string so
+// the precision info ('CheckSuite', 'RepositoryInvitation') survives.
+const TYPE_BADGE_STYLE: Record<GhCategory, { icon: LucideIcon; tone: PillTone }> = {
+  pr:      { icon: GitPullRequest,  tone: 'success' },
+  issue:   { icon: CircleDot,       tone: 'neutral' },
+  mention: { icon: AtSign,          tone: 'accent'  },
+  ci:      { icon: Workflow,        tone: 'neutral' },
+  other:   { icon: MoreHorizontal,  tone: 'neutral' },
+}
+const TYPE_BADGE_BG: Record<PillTone, React.CSSProperties> = {
+  accent:  { color: 'var(--accent)',         background: 'var(--accent-subtle)',     border: '1px solid transparent' },
+  error:   { color: 'var(--status-error)',   background: 'rgba(248,113,113,0.10)',   border: '1px solid transparent' },
+  neutral: { color: 'var(--text-secondary)', background: 'var(--surface-raised)',    border: '1px solid var(--border-subtle)' },
+  success: { color: '#10B981',               background: 'rgba(16,185,129,0.10)',    border: '1px solid transparent' },
+}
+
+function TypeBadge({ category, typeLabel }: { category?: GhCategory; typeLabel: string }) {
+  const { icon: Icon, tone } = TYPE_BADGE_STYLE[category ?? 'other']
+  const [hover, setHover] = useState(false)
+  return (
+    <div style={{ position: 'relative', display: 'inline-flex' }}>
+      <span
+        aria-label={typeLabel}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 22,
+          height: 18,
+          borderRadius: 4,
+          ...TYPE_BADGE_BG[tone],
+        }}
+      >
+        <Icon size={11} strokeWidth={2.2} />
+      </span>
+      {hover && (
+        <div
+          role="tooltip"
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 6px)',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            padding: '4px 8px',
+            fontSize: 11,
+            fontFamily: 'var(--font-mono)',
+            color: 'var(--text-primary)',
+            background: 'var(--surface-raised)',
+            border: '1px solid var(--border-default)',
+            borderRadius: 'var(--radius-sm)',
+            whiteSpace: 'nowrap',
+            pointerEvents: 'none',
+            zIndex: 10,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+          }}
+        >
+          {typeLabel}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function RepoSelect({ value, options, onChange }: {
+  value: 'all' | string
+  options: string[]
+  onChange: (v: 'all' | string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef<HTMLDivElement | null>(null)
+
+  // Close on click-outside or Escape.
+  useEffect(() => {
+    if (!open) return
+    function onDocClick(e: MouseEvent) {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false)
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDocClick)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  const label = value === 'all' ? 'All repos' : value
+
+  return (
+    <div ref={wrapRef} style={{ position: 'relative', flexShrink: 0 }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 8,
+          fontFamily: 'var(--font-mono)',
+          fontSize: 12,
+          padding: '5px 10px',
+          background: open ? 'var(--surface-hover)' : 'var(--surface-raised)',
+          border: `1px solid ${open ? 'var(--border-default)' : 'var(--border-subtle)'}`,
+          color: 'var(--text-secondary)',
+          borderRadius: 'var(--radius-sm)',
+          cursor: 'pointer',
+          transition: 'background 120ms ease, border-color 120ms ease',
+          maxWidth: 200,
+        }}
+        onMouseEnter={e => { if (!open) e.currentTarget.style.borderColor = 'var(--border-default)' }}
+        onMouseLeave={e => { if (!open) e.currentTarget.style.borderColor = 'var(--border-subtle)' }}
+      >
+        <span style={{
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          color: 'var(--text-primary)',
+        }}>{label}</span>
+        <ChevronDown size={12} style={{
+          color: 'var(--text-tertiary)',
+          transition: 'transform 150ms ease',
+          transform: open ? 'rotate(180deg)' : 'rotate(0)',
+          flexShrink: 0,
+        }} />
+      </button>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.12 }}
+          role="listbox"
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 4px)',
+            left: 0,
+            minWidth: '100%',
+            width: 'max-content',
+            maxWidth: 280,
+            maxHeight: 280,
+            overflowY: 'auto',
+            background: 'var(--surface-raised)',
+            border: '1px solid var(--border-default)',
+            borderRadius: 'var(--radius-md)',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+            zIndex: 20,
+            padding: 4,
+          }}
+        >
+          <RepoOption
+            label="All repos"
+            selected={value === 'all'}
+            onClick={() => { onChange('all'); setOpen(false) }}
+          />
+          {options.map(r => (
+            <RepoOption
+              key={r}
+              label={r}
+              selected={value === r}
+              onClick={() => { onChange(r); setOpen(false) }}
+            />
+          ))}
+        </motion.div>
+      )}
+    </div>
+  )
+}
+
+function RepoOption({ label, selected, onClick }: {
+  label: string
+  selected: boolean
+  onClick: () => void
+}) {
+  const [hover, setHover] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      role="option"
+      aria-selected={selected}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12,
+        width: '100%',
+        textAlign: 'left',
+        fontFamily: 'var(--font-mono)',
+        fontSize: 12,
+        padding: '6px 8px',
+        background: hover ? 'var(--surface-hover)' : 'transparent',
+        color: selected ? 'var(--accent)' : 'var(--text-secondary)',
+        borderRadius: 'var(--radius-sm)',
+        cursor: 'pointer',
+        transition: 'background 100ms ease, color 100ms ease',
+      }}
+    >
+      <span style={{
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+      }}>{label}</span>
+      {selected && <Check size={12} style={{ color: 'var(--accent)', flexShrink: 0 }} />}
+    </button>
   )
 }
