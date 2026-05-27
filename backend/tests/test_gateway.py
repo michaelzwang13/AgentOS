@@ -3,6 +3,10 @@
 import base64
 from unittest.mock import MagicMock, patch, AsyncMock
 
+import pytest
+
+from app.services import signal_feed_cache
+
 
 class TestSendEmail:
     def test_send_email_success(self, authed_client):
@@ -262,3 +266,87 @@ class TestMemory:
                 json={"key": "", "value": "v"},
             )
             assert resp.status_code == 400
+
+
+@pytest.fixture(autouse=True)
+def _reset_feed_cache():
+    """Signal Feed cache is module-level state — wipe between tests so a hit
+    in one test does not bleed into the next."""
+    signal_feed_cache.clear_all()
+    yield
+    signal_feed_cache.clear_all()
+
+
+class TestFeedCaching:
+    """The /slack/messages, /gmail/messages, /github/activity handlers wrap
+    their fetchers in signal_feed_cache.get_or_fetch — first call hits the
+    fetcher, second call within TTL serves from cache."""
+
+    def test_slack_messages_cached_after_first_call(self, authed_client):
+        client, user, fake_sb = authed_client
+        with patch("app.routers.gateway.feed_fetchers.slack_messages",
+                   new_callable=AsyncMock) as mock_fetch:
+            mock_fetch.return_value = {"connected": True, "messages": [{"id": "1"}]}
+            r1 = client.get("/gateway/slack/messages")
+            r2 = client.get("/gateway/slack/messages")
+            assert r1.status_code == 200
+            assert r2.status_code == 200
+            assert r1.json() == r2.json()
+            mock_fetch.assert_called_once_with(user["id"])
+
+    def test_gmail_messages_cached_after_first_call(self, authed_client):
+        client, user, fake_sb = authed_client
+        with patch("app.routers.gateway.feed_fetchers.gmail_messages",
+                   new_callable=AsyncMock) as mock_fetch:
+            mock_fetch.return_value = {"connected": True, "emails": [{"id": "a"}]}
+            client.get("/gateway/gmail/messages")
+            client.get("/gateway/gmail/messages")
+            mock_fetch.assert_called_once_with(user["id"])
+
+    def test_github_activity_cached_after_first_call(self, authed_client):
+        client, user, fake_sb = authed_client
+        with patch("app.routers.gateway.feed_fetchers.github_activity",
+                   new_callable=AsyncMock) as mock_fetch:
+            mock_fetch.return_value = {"connected": True, "items": [{"id": "x"}]}
+            client.get("/gateway/github/activity")
+            client.get("/gateway/github/activity")
+            mock_fetch.assert_called_once_with(user["id"])
+
+    def test_unconnected_response_not_cached(self, authed_client):
+        """When the fetcher returns connected=False (no credential), we must
+        re-fetch on subsequent calls so a freshly-connected account shows up
+        without waiting out the TTL."""
+        client, user, fake_sb = authed_client
+        with patch("app.routers.gateway.feed_fetchers.slack_messages",
+                   new_callable=AsyncMock) as mock_fetch:
+            mock_fetch.return_value = {"connected": False, "messages": []}
+            client.get("/gateway/slack/messages")
+            client.get("/gateway/slack/messages")
+            assert mock_fetch.call_count == 2
+
+    def test_disconnect_slack_clears_cache(self, authed_client):
+        client, user, fake_sb = authed_client
+        with patch("app.routers.gateway.CredentialStore") as mock_cs:
+            mock_cs.delete = MagicMock()
+            signal_feed_cache.set(user["id"], "slack", {"connected": True, "messages": []})
+            resp = client.delete("/gateway/slack/disconnect")
+            assert resp.status_code == 200
+            assert signal_feed_cache.get(user["id"], "slack") is None
+
+    def test_disconnect_gmail_clears_cache(self, authed_client):
+        client, user, fake_sb = authed_client
+        with patch("app.routers.gateway.CredentialStore") as mock_cs:
+            mock_cs.delete = MagicMock()
+            signal_feed_cache.set(user["id"], "gmail", {"connected": True, "emails": []})
+            resp = client.delete("/gateway/gmail/disconnect")
+            assert resp.status_code == 200
+            assert signal_feed_cache.get(user["id"], "gmail") is None
+
+    def test_disconnect_github_clears_cache(self, authed_client):
+        client, user, fake_sb = authed_client
+        with patch("app.routers.gateway.CredentialStore") as mock_cs:
+            mock_cs.delete = MagicMock()
+            signal_feed_cache.set(user["id"], "github", {"connected": True, "items": []})
+            resp = client.delete("/gateway/github/disconnect")
+            assert resp.status_code == 200
+            assert signal_feed_cache.get(user["id"], "github") is None
