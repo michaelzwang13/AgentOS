@@ -27,6 +27,9 @@ os.environ.update(
         # The PR watcher would spin up a background poll loop the moment
         # TestClient(app) enters its lifespan; disable it for tests.
         "PR_WATCHER_ENABLED": "false",
+        # Same reasoning — the Signal Feed poller is a second background
+        # task started in the lifespan; tests should never hit live APIs.
+        "FEED_POLLER_ENABLED": "false",
     }
 )
 

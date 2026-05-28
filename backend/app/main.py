@@ -15,6 +15,7 @@ from app.routers import (
     users, agents, gateway, credentials, tasks, roles, auth, chat,
     watched_repos,
 )
+from app.services.feed_poller import FeedPoller
 from app.services.pr_watcher import PRWatcher
 
 logging.basicConfig(
@@ -26,23 +27,32 @@ logger = logging.getLogger("agentos")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Start the PR watcher background task; cancel it cleanly on shutdown.
+    """Start the platform's background workers and cancel them cleanly on
+    shutdown. Each worker is individually env-gated so the test suite (and
+    ad-hoc debug runs) can disable them; defaults are all enabled.
 
-    Disabled when PR_WATCHER_ENABLED=false (test suites, ad-hoc debug runs);
-    otherwise on by default.
+    Workers:
+    - PRWatcher        — autonomous PR review trigger (PR_WATCHER_ENABLED)
+    - FeedPoller       — keeps Signal Feed cache warm (FEED_POLLER_ENABLED)
     """
-    watcher_task: asyncio.Task | None = None
+    background_tasks: list[asyncio.Task] = []
+
     if os.getenv("PR_WATCHER_ENABLED", "true").lower() != "false":
-        watcher = PRWatcher()
-        watcher_task = asyncio.create_task(watcher.run_forever())
+        background_tasks.append(asyncio.create_task(PRWatcher().run_forever()))
+    if os.getenv("FEED_POLLER_ENABLED", "true").lower() != "false":
+        background_tasks.append(asyncio.create_task(FeedPoller().run_forever()))
 
     try:
         yield
     finally:
-        if watcher_task is not None:
-            watcher_task.cancel()
+        # Cancel all tasks first, then await each — order matters: if we
+        # awaited inside the cancel loop the second worker would run for a
+        # tick or two after the first was already gone.
+        for task in background_tasks:
+            task.cancel()
+        for task in background_tasks:
             try:
-                await watcher_task
+                await task
             except asyncio.CancelledError:
                 pass
 

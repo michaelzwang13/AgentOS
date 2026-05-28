@@ -48,6 +48,21 @@ class CredentialModel:
         return result.data
 
     @staticmethod
+    def list_active_services() -> list[dict]:
+        """Return every (user_id, service) pair that currently has a credential.
+
+        Used by the Signal Feed poller to enumerate the work it needs to do
+        each tick. Returns minimal columns — the poller doesn't need the
+        token (the fetcher will re-fetch the credential anyway)."""
+        result = (
+            get_supabase()
+            .table(TABLE)
+            .select("user_id, service")
+            .execute()
+        )
+        return result.data
+
+    @staticmethod
     def delete(user_id: str, service: str) -> bool:
         result = (
             get_supabase()
