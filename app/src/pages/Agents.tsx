@@ -178,9 +178,38 @@ export default function Agents() {
         if (d.connected && d.emails?.length) { setGmailConn(true); setGmailData(d.emails) }
       }),
       fetchGithubActivity().then(d => {
-        if (d.connected && d.items?.length) { setGithubConn(true); setGithubData(d.items) }
+        if (d.connected && d.items?.length) {
+          setGithubConn(true); setGithubData(d.items)
+          // Reset filters on the mock → real transition so a leftover filter
+          // doesn't strand the user on an empty view of the new dataset.
+          setGhCategory('all'); setGhRepo('all')
+        }
       }),
     ]).finally(() => setFeedLoading(false))
+  }, [])
+
+  // Background auto-refresh — pulls fresh data from the backend cache every
+  // 120s so the feed reflects upstream changes without a manual reload.
+  // Pairs with the server-side feed_poller that keeps the cache warm; the
+  // two intervals are intentionally desynced (each browser starts its phase
+  // from page-mount, the backend from process boot — the 180s cache TTL
+  // absorbs the drift). We deliberately do NOT set feedLoading on tick to
+  // avoid the spinner flicker, and we do NOT reset filters so the user's
+  // active selection survives the swap.
+  useEffect(() => {
+    if (!isLoggedIn()) return
+    const id = setInterval(() => {
+      fetchSlackMessages().then(d => {
+        if (d.connected) { setSlackConn(true); setSlackData(d.messages) }
+      })
+      fetchGmailMessages().then(d => {
+        if (d.connected) { setGmailConn(true); setGmailData(d.emails) }
+      })
+      fetchGithubActivity().then(d => {
+        if (d.connected) { setGithubConn(true); setGithubData(d.items) }
+      })
+    }, 120_000)
+    return () => clearInterval(id)
   }, [])
 
   // OAuth redirect params — also flip the active tab to whichever tool the
@@ -197,7 +226,12 @@ export default function Agents() {
     }
     if (p.get('github_connected')) {
       setTab('github')
-      fetchGithubActivity().then(d => { if (d.connected) { setGithubConn(true); setGithubData(d.items) } })
+      fetchGithubActivity().then(d => {
+        if (d.connected) {
+          setGithubConn(true); setGithubData(d.items)
+          setGhCategory('all'); setGhRepo('all')
+        }
+      })
     }
     if (p.toString()) window.history.replaceState({}, '', '/agents')
   }, [])
@@ -215,9 +249,9 @@ export default function Agents() {
   // ── GitHub filter state ──────────────────
   const [ghCategory, setGhCategory] = useState<GhFilter>('all')
   const [ghRepo, setGhRepo] = useState<'all' | string>('all')
-  // Reset filters when the underlying data refreshes — avoids stranding the
-  // user on a filter that matches nothing.
-  useEffect(() => { setGhCategory('all'); setGhRepo('all') }, [githubData])
+  // Filters reset at call sites where the dataset shape genuinely changes
+  // (mount fetch, OAuth callback, disconnect-to-mock). Auto-refresh ticks
+  // do NOT reset — the user keeps their active filter across the swap.
 
   const filteredGithub = useMemo(() => githubData.filter(it => {
     if (ghCategory !== 'all' && (it.category ?? 'other') !== ghCategory) return false
@@ -260,7 +294,12 @@ export default function Agents() {
     await disconnectService(tab as 'slack' | 'gmail' | 'github')
     if (tab === 'slack')  { setSlackConn(false);  setSlackData(MOCK_SLACK)   }
     if (tab === 'gmail')  { setGmailConn(false);  setGmailData(MOCK_GMAIL)   }
-    if (tab === 'github') { setGithubConn(false); setGithubData(MOCK_GITHUB) }
+    if (tab === 'github') {
+      setGithubConn(false); setGithubData(MOCK_GITHUB)
+      // Disconnect swaps real data for mock — filter selections from the
+      // real dataset (real repo names) will not match anything in mock.
+      setGhCategory('all'); setGhRepo('all')
+    }
   }
 
   async function handlePostDigest() {
