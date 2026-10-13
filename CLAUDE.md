@@ -42,9 +42,11 @@ Backend layout under `backend/app/`:
 
 Bring up the whole stack (Docker image build + network + backend + frontend):
 ```bash
-./start-mac.sh   # Apple Silicon — forces arm64 for Python deps (use this on this machine)
-./start.sh       # Linux / Intel Mac
+./start-mac-compose.sh   # Apple Silicon, full E2E - platform runs in Docker on the openclaw-agents network
+./start-mac.sh           # Apple Silicon, native uvicorn --reload (arm64 venv) - hire works, task dispatch does NOT
+./start.sh               # Linux / Intel Mac
 ```
+On Mac, Docker Desktop blocks the host from reaching container bridge IPs, so a natively-run platform cannot `POST` to an agent's `:8080` sidecar. Use `start-mac-compose.sh` for anything that dispatches tasks (manual tasks, PR-watcher); use `start-mac.sh` only for fast iteration on non-dispatch backend code.
 
 Backend only — **on Apple Silicon, always use `arch -arm64` for the venv Python** or `pydantic-core` / native wheels will fail to import:
 ```bash
